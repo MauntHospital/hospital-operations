@@ -440,11 +440,28 @@ export async function setDepartmentActive(user: User, input: { departmentId: num
   return { success: true };
 }
 
+export async function updateDepartment(user: User, input: { departmentId: number; name: string; code: string; description?: string }) {
+  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can edit departments." });
+  const db = await requireDb();
+  await db.update(departments).set({ name: input.name, code: input.code.toUpperCase(), description: input.description ?? null }).where(eq(departments.id, input.departmentId));
+  await writeAudit(user.id, "department_updated", "department", input.departmentId, input);
+  return { success: true };
+}
+
 export async function setStaffActive(user: User, input: { userId: number; active: boolean }) {
   if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can activate or deactivate staff." });
   const db = await requireDb();
   await db.update(staffProfiles).set({ active: input.active }).where(eq(staffProfiles.userId, input.userId));
   await writeAudit(user.id, input.active ? "staff_activated" : "staff_deactivated", "user", input.userId, input);
+  return { success: true };
+}
+
+export async function updateStaff(user: User, input: { userId: number; name: string; email?: string; departmentId: number; role: "hospital_admin" | "department_head" | "supervisor" | "staff" | "viewer"; title?: string }) {
+  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can edit staff." });
+  const db = await requireDb();
+  await db.update(users).set({ name: input.name, email: input.email ?? null, role: input.role }).where(eq(users.id, input.userId));
+  await db.update(staffProfiles).set({ departmentId: input.departmentId, title: input.title ?? null }).where(eq(staffProfiles.userId, input.userId));
+  await writeAudit(user.id, "staff_updated", "user", input.userId, input);
   return { success: true };
 }
 
@@ -540,6 +557,14 @@ export async function runOperationalCycle() {
   const db = await requireDb();
   const now = new Date();
   const today = dateKey(now);
+  const activeRules = await db.select().from(escalationRules).where(eq(escalationRules.active, true));
+  const escalationStage = (overdueAt: Date, rule: { firstReminderMinutes: number; departmentHeadMinutes: number; adminMinutes: number }) => {
+    const elapsedMinutes = Math.max(0, Math.floor((now.getTime() - overdueAt.getTime()) / 60_000));
+    if (elapsedMinutes >= rule.adminMinutes) return "admin";
+    if (elapsedMinutes >= rule.departmentHeadMinutes) return "department_head";
+    if (elapsedMinutes >= rule.firstReminderMinutes) return "staff";
+    return null;
+  };
   const recurring = await db.select({ recurring: recurringTasks, task: tasks }).from(recurringTasks).innerJoin(tasks, eq(recurringTasks.taskId, tasks.id)).where(and(eq(recurringTasks.active, true), eq(tasks.active, true)));
   let generatedAssignments = 0;
   for (const row of recurring) {
@@ -554,13 +579,22 @@ export async function runOperationalCycle() {
   const overdueCandidates = await db.select().from(taskAssignments).where(and(lt(taskAssignments.dueAt, now), inArray(taskAssignments.status, ["not_started", "in_progress", "reopened"])));
   for (const assignment of overdueCandidates) {
     await db.update(taskAssignments).set({ status: "overdue" }).where(eq(taskAssignments.id, assignment.id));
-    await db.insert(notifications).values({ userId: assignment.assignedUserId, departmentId: assignment.departmentId, type: "overdue_task", title: "Task overdue", body: "An operational task has passed its deadline and is now subject to escalation.", entityType: "task_assignment", entityId: assignment.id });
+    const rule = activeRules.find(item => item.appliesTo === "task") ?? activeRules[0];
+    const stage = rule ? escalationStage(assignment.dueAt, rule) : "staff";
+    if (stage) {
+      await db.insert(notifications).values({ userId: assignment.assignedUserId, departmentId: assignment.departmentId, type: "overdue_task", title: `Task overdue — ${stage.replaceAll("_", " ")} escalation`, body: "An operational task has passed its deadline and reached the configured escalation stage.", entityType: "task_assignment", entityId: assignment.id });
+      await writeAudit(null, `task_escalated_${stage}`, "task_assignment", assignment.id, { ruleId: rule?.id ?? null, dueAt: assignment.dueAt.toISOString() });
+    }
   }
   const overdueIssues = await db.select().from(issues).where(and(lt(issues.dueAt, now), inArray(issues.status, ["open", "assigned", "in_progress"])));
   for (const issue of overdueIssues) {
-    await db.update(issues).set({ status: "escalated" }).where(eq(issues.id, issue.id));
-    await db.insert(notifications).values({ userId: issue.assignedTo, departmentId: issue.departmentId, type: "issue_escalated", title: "Issue escalated", body: `${issue.code}: ${issue.title} has exceeded its due date and was escalated.`, entityType: "issue", entityId: issue.id });
-    await writeAudit(null, "issue_escalated_by_scheduler", "issue", issue.id, { dueAt: issue.dueAt?.toISOString() });
+    const rule = activeRules.find(item => item.appliesTo === "issue" && (!item.priority || item.priority === issue.priority)) ?? activeRules.find(item => item.appliesTo === "issue") ?? activeRules[0];
+    const stage = rule ? escalationStage(issue.dueAt!, rule) : "staff";
+    if (stage) {
+      await db.update(issues).set({ status: "escalated" }).where(eq(issues.id, issue.id));
+      await db.insert(notifications).values({ userId: issue.assignedTo, departmentId: issue.departmentId, type: "issue_escalated", title: `Issue escalated — ${stage.replaceAll("_", " ")}`, body: `${issue.code}: ${issue.title} exceeded its due date and reached the configured escalation stage.`, entityType: "issue", entityId: issue.id });
+      await writeAudit(null, `issue_escalated_${stage}`, "issue", issue.id, { ruleId: rule?.id ?? null, dueAt: issue.dueAt?.toISOString() });
+    }
   }
   return { generatedAssignments, markedOverdue: overdueCandidates.length, escalatedIssues: overdueIssues.length, processedAt: now.toISOString() };
 }
