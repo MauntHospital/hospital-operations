@@ -1,0 +1,20 @@
+# Project TODO
+
+- [x] Define hospital operations domain entities, role boundaries, and status vocabularies in the database schema.
+- [x] Implement authenticated, role-aware backend procedures for departments, staff, tasks, assignments, checklists, and task completions.
+- [x] Implement issue creation from failed checklist findings, issue assignment, resolution, escalation state, and immutable audit entries.
+- [x] Implement inventory expiry and equipment maintenance records with operational alert calculations.
+- [x] Implement duty rosters, attendance exceptions, and shift handover records with unresolved-item continuity.
+- [x] Implement recurring task generation, overdue detection, escalation rules, and in-app notifications through scheduled workflows.
+- [x] Implement operational reporting queries, department performance metrics, calendar events, and export-ready report data.
+- [x] Build an accessible, responsive application shell with role-aware navigation and a Hospital Operations Control Tower dashboard.
+- [x] Build functional My Day, task-detail checklist, task creation, issue management, inventory expiry, equipment, roster, handover, calendar, reports, and settings experiences.
+- [x] Seed realistic non-patient hospital operational data for immediate testing without fabricating customer reviews, ratings, or testimonials.
+- [x] Write and run Vitest coverage for permissions, issue creation from findings, task completion rules, and operational status calculations.
+- [ ] Add role-aware department and staff management, including create, edit, assignment, and deactivate workflows.
+- [ ] Add issue assignment and escalation-rule application with a visible escalation history.
+- [ ] Add controlled expiry, equipment maintenance, inventory, and duty-attendance update workflows.
+- [x] Add a hospital-wide operational calendar and a settings screen for escalation and notification rules.
+- [x] Add backend tests for checklist issue creation and required-checklist task completion validation.
+- [ ] Create the production scheduled heartbeat after deployment so the recurring operations callback executes automatically.
+- [x] Verify desktop and mobile rendering, validate the requested end-to-end workflow, update this worklist, and save the completed project checkpoint.

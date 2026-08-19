@@ -1,0 +1,36 @@
+import { z } from "zod";
+import { protectedProcedure, router } from "../_core/trpc";
+import { assignIssue, completeTask, createEquipmentMaintenance, createExpiryItem, createHandover, createInventoryItem, createIssue, createTask, getCalendar, getDashboard, getIssueHistory, getMyDay, getOperationsModules, getReports, getSettings, getTaskDetail, listIssues, manageDepartment, manageStaff, resolveIssue, saveChecklistResult, setDepartmentActive, setStaffActive, updateDutyAttendance, updateEscalationRule, updateNotificationRule } from "../operationsData";
+
+const priority = z.enum(["critical", "high", "medium", "low"]);
+const frequency = z.enum(["one_time", "daily", "every_shift", "weekly", "monthly", "quarterly", "yearly", "custom"]);
+const finding = z.enum(["available", "not_available", "damaged", "expired", "low_stock", "under_maintenance", "missing", "wrong_location"]);
+
+export const operationsRouter = router({
+  dashboard: protectedProcedure.query(({ ctx }) => getDashboard(ctx.user)),
+  myDay: protectedProcedure.query(({ ctx }) => getMyDay(ctx.user)),
+  modules: protectedProcedure.query(({ ctx }) => getOperationsModules(ctx.user)),
+  reports: protectedProcedure.query(({ ctx }) => getReports(ctx.user)),
+  taskDetail: protectedProcedure.input(z.object({ assignmentId: z.number().int().positive() })).query(({ ctx, input }) => getTaskDetail(ctx.user, input.assignmentId)),
+  taskCreate: protectedProcedure.input(z.object({ name: z.string().min(3).max(220), description: z.string().max(3000).optional(), departmentId: z.number().int().positive(), assignedUserId: z.number().int().positive().optional(), frequency, dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), priority, category: z.string().min(2).max(120), instructions: z.string().max(5000).optional(), evidenceRequired: z.boolean().optional(), photoRequired: z.boolean().optional(), approvalRequired: z.boolean().optional(), checklist: z.array(z.string().max(300)).max(24) })).mutation(({ ctx, input }) => createTask(ctx.user, input)),
+  checklistSave: protectedProcedure.input(z.object({ assignmentId: z.number().int().positive(), checklistId: z.number().int().positive(), status: finding, note: z.string().max(2000).optional(), evidenceUrl: z.string().url().optional() })).mutation(({ ctx, input }) => saveChecklistResult(ctx.user, input)),
+  taskComplete: protectedProcedure.input(z.object({ assignmentId: z.number().int().positive(), notes: z.string().max(3000).optional(), evidenceUrl: z.string().url().optional() })).mutation(({ ctx, input }) => completeTask(ctx.user, input)),
+  issues: protectedProcedure.query(({ ctx }) => listIssues(ctx.user)),
+  issueCreate: protectedProcedure.input(z.object({ title: z.string().min(3).max(240), description: z.string().max(3000).optional(), departmentId: z.number().int().positive(), category: z.string().min(2).max(120), priority, dueAt: z.date().optional() })).mutation(({ ctx, input }) => createIssue(ctx.user, input)),
+  issueAssign: protectedProcedure.input(z.object({ issueId: z.number().int().positive(), assignedTo: z.number().int().positive(), dueAt: z.date().optional() })).mutation(({ ctx, input }) => assignIssue(ctx.user, input)),
+  issueResolve: protectedProcedure.input(z.object({ issueId: z.number().int().positive(), resolution: z.string().min(3).max(3000) })).mutation(({ ctx, input }) => resolveIssue(ctx.user, input)),
+  issueHistory: protectedProcedure.input(z.object({ issueId: z.number().int().positive() })).query(({ ctx, input }) => getIssueHistory(ctx.user, input.issueId)),
+  handoverCreate: protectedProcedure.input(z.object({ departmentId: z.number().int().positive(), shift: z.string().min(2).max(80), pendingTasks: z.string().max(3000).optional(), equipmentProblems: z.string().max(3000).optional(), stockShortages: z.string().max(3000).optional(), incidents: z.string().max(3000).optional(), operationalNotes: z.string().max(3000).optional() })).mutation(({ ctx, input }) => createHandover(ctx.user, input)),
+  departmentCreate: protectedProcedure.input(z.object({ name: z.string().min(2).max(160), code: z.string().min(2).max(24), description: z.string().max(3000).optional() })).mutation(({ ctx, input }) => manageDepartment(ctx.user, input)),
+  departmentSetActive: protectedProcedure.input(z.object({ departmentId: z.number().int().positive(), active: z.boolean() })).mutation(({ ctx, input }) => setDepartmentActive(ctx.user, input)),
+  staffCreate: protectedProcedure.input(z.object({ name: z.string().min(2).max(160), email: z.string().email().optional(), departmentId: z.number().int().positive(), role: z.enum(["hospital_admin", "department_head", "supervisor", "staff", "viewer"]), title: z.string().max(120).optional() })).mutation(({ ctx, input }) => manageStaff(ctx.user, input)),
+  staffSetActive: protectedProcedure.input(z.object({ userId: z.number().int().positive(), active: z.boolean() })).mutation(({ ctx, input }) => setStaffActive(ctx.user, input)),
+  inventoryCreate: protectedProcedure.input(z.object({ name: z.string().min(2).max(220), category: z.string().min(2).max(120), departmentId: z.number().int().positive(), quantity: z.number().int().min(0), reorderLevel: z.number().int().min(0), unit: z.string().min(1).max(32) })).mutation(({ ctx, input }) => createInventoryItem(ctx.user, input)),
+  expiryCreate: protectedProcedure.input(z.object({ name: z.string().min(2).max(220), category: z.string().min(2).max(120), departmentId: z.number().int().positive(), batchNumber: z.string().max(100).optional(), quantity: z.number().int().positive(), expiryDate: z.date(), storageLocation: z.string().max(180).optional() })).mutation(({ ctx, input }) => createExpiryItem(ctx.user, input)),
+  maintenanceCreate: protectedProcedure.input(z.object({ equipmentId: z.number().int().positive(), maintenanceType: z.string().min(2).max(120), scheduledAt: z.date(), vendor: z.string().max(180).optional(), notes: z.string().max(3000).optional() })).mutation(({ ctx, input }) => createEquipmentMaintenance(ctx.user, input)),
+  dutyAttendanceUpdate: protectedProcedure.input(z.object({ rosterId: z.number().int().positive(), attendance: z.enum(["present", "absent", "late", "leave", "replacement"]), replacementUserId: z.number().int().positive().optional(), notes: z.string().max(3000).optional() })).mutation(({ ctx, input }) => updateDutyAttendance(ctx.user, input)),
+  calendar: protectedProcedure.query(({ ctx }) => getCalendar(ctx.user)),
+  settings: protectedProcedure.query(({ ctx }) => getSettings(ctx.user)),
+  escalationRuleUpdate: protectedProcedure.input(z.object({ ruleId: z.number().int().positive(), firstReminderMinutes: z.number().int().min(0).max(10_080), departmentHeadMinutes: z.number().int().min(0).max(10_080), adminMinutes: z.number().int().min(0).max(10_080), active: z.boolean() })).mutation(({ ctx, input }) => updateEscalationRule(ctx.user, input)),
+  notificationRuleUpdate: protectedProcedure.input(z.object({ ruleId: z.number().int().positive(), inAppEnabled: z.boolean(), emailEnabled: z.boolean(), leadMinutes: z.number().int().min(0).max(525_600), active: z.boolean() })).mutation(({ ctx, input }) => updateNotificationRule(ctx.user, input)),
+});
