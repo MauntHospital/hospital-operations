@@ -16,5 +16,8 @@
 - [x] Add controlled expiry, equipment maintenance, inventory, and duty-attendance update workflows.
 - [x] Add a hospital-wide operational calendar and a settings screen for escalation and notification rules.
 - [x] Add backend tests for checklist issue creation and required-checklist task completion validation.
-- [ ] Create the production scheduled heartbeat after deployment so the recurring operations callback executes automatically.
+- [x] Create the production scheduled heartbeat after deployment so the recurring operations callback executes automatically.
 - [x] Verify desktop and mobile rendering, validate the requested end-to-end workflow, update this worklist, and save the completed project checkpoint.
+- [x] Add visual duty-roster availability and handover indicators with accessible hover/focus tooltips.
+- [x] Add Control Tower task filtering for priority and overdue status, with task sorting controls.
+- [x] Add targeted test coverage and responsive visual verification for the roster and Control Tower enhancements.
