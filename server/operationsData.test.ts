@@ -255,6 +255,8 @@ describe("operational backend mutations", () => {
     expect(report.whatsappSummary).toMatchObject({ dispatched: 2, completed: 1, pendingOrNoReply: 1, pointsLost: 2 });
     expect(report.whatsappAccountability).toEqual([expect.objectContaining({ departmentName: "Radiology", score: 98 })]);
     expect(report.departmentPointTrends).toEqual([expect.objectContaining({ departmentName: "Radiology", events: [expect.objectContaining({ pointDelta: -10, scoreAfter: 99 })] })]);
+    expect(report.complianceSummary).toMatchObject({ hospitalRate: 50, dispatched: 2, completed: 1 });
+    expect(report.responseTimeAnalytics).toMatchObject({ acknowledgedCount: 0, respondedCount: 0, averageAcknowledgementMinutes: null, averageResponseMinutes: null });
   });
 
   it("persists the super-admin-selected Saturday or Sunday weekly schedule into the created task and assignment", async () => {
