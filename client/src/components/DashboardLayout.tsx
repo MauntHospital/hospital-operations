@@ -6,7 +6,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, Si
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CalendarClock, ClipboardList, FileBarChart, HeartPulse, LayoutDashboard, LogOut, MessageCircleMore, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, ClipboardList, FileBarChart, HeartPulse, LayoutDashboard, LogOut, MessageCircleMore, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
@@ -20,6 +20,7 @@ const navigation = [
   { icon: PackageSearch, label: "Inventory & expiry", path: "/inventory", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: AlertTriangle, label: "Follow-up queue", path: "/operational-follow-ups", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: PackageSearch, label: "Search", path: "/search", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
+  { icon: Bell, label: "Alerts", path: "/notifications", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: CalendarClock, label: "Roster", path: "/roster", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: CalendarClock, label: "Handover", path: "/handover", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff"] },
   { icon: CalendarClock, label: "Calendar", path: "/calendar", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
