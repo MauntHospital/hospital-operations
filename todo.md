@@ -28,3 +28,10 @@
 - [x] Keep invalid local sign-in and current-password failures on the password flows instead of initiating the existing OAuth sign-in redirect.
 - [x] Add explicit non-administrator authorization-denial coverage for staff account provisioning and password reset.
 - [x] Add session-cookie procedure tests for local sign-in and first-login password change behavior.
+- [x] Clarify the staff account sign-in entry point so users can use manager-provisioned credentials without an external account.
+- [x] Add four My Day task-list cards for Emergency, Daily checks, Weekly checks, and Monthly administration tasks.
+- [x] Classify weekly checks for Saturday or Sunday and monthly tasks for data collection and attendance checking.
+- [x] Add task-grouping tests and responsive visual verification for the revised My Day layout.
+- [x] Add a visible Saturday or Sunday selector when managers create weekly checks, using the existing weekly-day task field.
+- [x] Add coverage that verifies manager-created Saturday and Sunday weekly checks are scheduled to the selected weekend day.
+- [x] Add a service-level test proving a manager-created weekly task persists the selected Saturday or Sunday schedule in its assignment and recurrence data.

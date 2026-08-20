@@ -27,7 +27,7 @@ import {
   type User,
 } from "../drizzle/schema";
 import { getDb } from "./db";
-import { computeNextDueDate, expiryHealth, findingCreatesIssue, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason, type FindingStatus } from "./operationsLogic";
+import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason, type FindingStatus } from "./operationsLogic";
 import { hashPassword, normalizeUsername, passwordPolicyError, verifyPassword } from "./localAuth";
 
 const adminRoles = ["super_admin", "hospital_admin"] as const;
@@ -323,13 +323,14 @@ export async function completeTask(user: User, input: { assignmentId: number; no
   return { status: finalStatus };
 }
 
-export async function createTask(user: User, input: { name: string; description?: string; departmentId: number; assignedUserId?: number; frequency: "one_time" | "daily" | "every_shift" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"; dueTime: string; priority: "critical" | "high" | "medium" | "low"; category: string; instructions?: string; evidenceRequired?: boolean; photoRequired?: boolean; approvalRequired?: boolean; checklist: string[] }) {
+export async function createTask(user: User, input: { name: string; description?: string; departmentId: number; assignedUserId?: number; frequency: "one_time" | "daily" | "every_shift" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"; dueTime: string; priority: "critical" | "high" | "medium" | "low"; category: string; instructions?: string; evidenceRequired?: boolean; photoRequired?: boolean; approvalRequired?: boolean; weeklyDay?: "saturday" | "sunday"; checklist: string[] }) {
   ensureManager(user);
   const db = await requireDb();
-  const ids = await db.insert(tasks).values({ ...input, assignedUserId: input.assignedUserId ?? null, description: input.description ?? null, instructions: input.instructions ?? null, evidenceRequired: input.evidenceRequired ?? false, photoRequired: input.photoRequired ?? false, approvalRequired: input.approvalRequired ?? false, createdBy: user.id }).$returningId();
+  const { weeklyDay, ...taskInput } = input;
+  const ids = await db.insert(tasks).values({ ...taskInput, assignedUserId: input.assignedUserId ?? null, description: input.description ?? null, instructions: input.instructions ?? null, recurrenceRule: input.frequency === "weekly" ? `weekly:${weeklyDay ?? "saturday"}` : null, evidenceRequired: input.evidenceRequired ?? false, photoRequired: input.photoRequired ?? false, approvalRequired: input.approvalRequired ?? false, createdBy: user.id }).$returningId();
   const taskId = ids[0]!.id;
   if (input.checklist.length) await db.insert(taskChecklists).values(input.checklist.filter(Boolean).map((label, position) => ({ taskId, label, position, required: true })));
-  const dueAt = new Date(`${dateKey()}T${input.dueTime}:00`);
+  const dueAt = initialTaskDueDate(input.frequency, input.dueTime, weeklyDay ?? "saturday");
   const assignment = await db.insert(taskAssignments).values({ taskId, departmentId: input.departmentId, assignedUserId: input.assignedUserId ?? null, dueAt }).$returningId();
   if (input.frequency !== "one_time") await db.insert(recurringTasks).values({ taskId, nextRunAt: computeNextDueDate(input.frequency, dueAt) });
   await writeAudit(user.id, "task_created", "task", taskId, { assignmentId: assignment[0]!.id, frequency: input.frequency });

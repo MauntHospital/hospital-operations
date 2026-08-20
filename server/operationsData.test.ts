@@ -14,7 +14,7 @@ vi.mock("./localAuth", () => ({
   verifyPassword: async (value: string) => value === "AValidPassword2026",
 }));
 
-import { authenticateStaffAccount, completeTask, getMyDay, manageStaff, resetStaffPassword, saveChecklistResult } from "./operationsData";
+import { authenticateStaffAccount, completeTask, createTask, getMyDay, manageStaff, resetStaffPassword, saveChecklistResult } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -147,5 +147,22 @@ describe("operational backend mutations", () => {
 
     expect(day.counts.total).toBe(1);
     expect(day.tasks[0]).toMatchObject({ task: { name: "Portable oxygen check" }, departmentName: "Radiology" });
+  });
+
+  it("persists the manager-selected Saturday or Sunday weekly schedule into the created task and assignment", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    const base = { departmentId: 4, frequency: "weekly" as const, dueTime: "09:30", priority: "medium" as const, category: "Safety", checklist: [] };
+
+    await createTask(admin, { ...base, name: "Saturday generator check", weeklyDay: "saturday" });
+    await createTask(admin, { ...base, name: "Sunday attendance review", weeklyDay: "sunday" });
+
+    const saturdayTask = fake.writes.find(write => (write.payload as any)?.name === "Saturday generator check")?.payload as any;
+    const sundayTask = fake.writes.find(write => (write.payload as any)?.name === "Sunday attendance review")?.payload as any;
+    const assignments = fake.writes.filter(write => (write.payload as any)?.dueAt instanceof Date).map(write => (write.payload as any).dueAt as Date);
+    expect(saturdayTask.recurrenceRule).toBe("weekly:saturday");
+    expect(sundayTask.recurrenceRule).toBe("weekly:sunday");
+    expect(assignments.some(dueAt => dueAt.getDay() === 6)).toBe(true);
+    expect(assignments.some(dueAt => dueAt.getDay() === 0)).toBe(true);
   });
 });

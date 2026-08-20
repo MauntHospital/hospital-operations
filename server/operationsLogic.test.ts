@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { User } from "../drizzle/schema";
 import { ensureManager, isAdmin, isManager } from "./operationsData";
-import { computeNextDueDate, expiryHealth, findingCreatesIssue, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason } from "./operationsLogic";
+import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason } from "./operationsLogic";
 
 const baseUser: User = {
   id: 7,
@@ -47,6 +47,12 @@ describe("hospital operational workflow logic", () => {
     const reference = new Date("2026-08-19T08:00:00.000Z");
     expect(computeNextDueDate("daily", reference).toISOString()).toBe("2026-08-20T08:00:00.000Z");
     expect(computeNextDueDate("weekly", reference).toISOString()).toBe("2026-08-26T08:00:00.000Z");
+  });
+
+  it("anchors new weekly checks to the selected Saturday or Sunday", () => {
+    const wednesday = new Date("2026-08-19T08:00:00.000Z");
+    expect(initialTaskDueDate("weekly", "09:30", "saturday", wednesday).toISOString()).toBe("2026-08-22T09:30:00.000Z");
+    expect(initialTaskDueDate("weekly", "09:30", "sunday", wednesday).toISOString()).toBe("2026-08-23T09:30:00.000Z");
   });
 
   it("allows operational managers while preventing staff from administrative workflow creation", () => {

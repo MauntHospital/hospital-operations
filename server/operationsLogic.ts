@@ -46,6 +46,18 @@ export function computeNextDueDate(frequency: string, reference = new Date()) {
   return next;
 }
 
+export function initialTaskDueDate(frequency: string, dueTime: string, weeklyDay: "saturday" | "sunday" = "saturday", now = new Date()) {
+  const [hour, minute] = dueTime.split(":").map(Number);
+  const dueAt = new Date(now);
+  dueAt.setHours(hour ?? 0, minute ?? 0, 0, 0);
+  if (frequency !== "weekly") return dueAt;
+  const targetDay = weeklyDay === "sunday" ? 0 : 6;
+  const offset = (targetDay - now.getDay() + 7) % 7;
+  dueAt.setDate(dueAt.getDate() + offset);
+  if (dueAt.getTime() <= now.getTime()) dueAt.setDate(dueAt.getDate() + 7);
+  return dueAt;
+}
+
 export function taskCompletionBlockReason(input: { requiredChecklistCount: number; completedChecklistCount: number; evidenceRequired: boolean; evidenceUrl?: string }) {
   const remaining = input.requiredChecklistCount - input.completedChecklistCount;
   if (remaining > 0) return `Complete all required checklist items before submitting (${remaining} remaining).`;
