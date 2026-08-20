@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, createTask, dispatchWhatsAppTask, getDashboard, getMyDay, getReports, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateTaskScoringRule } from "./operationsData";
+import { completeTask, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getMyDay, getReports, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -284,6 +284,15 @@ describe("operational backend mutations", () => {
     const fake = makeDb([]);
     state.db = fake.db;
     await expect(updateTaskScoringRule(actor, { ruleId: 1, weightTenths: 30 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("denies staff users from creating Version 2 risks, management actions, and linked follow-up tasks", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(createRisk(actor, { description: "Unresolved generator alarm", category: "Safety", departmentId: 4, likelihood: 3, impact: 4 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(createManagementAction(actor, { title: "Verify generator alarm", departmentId: 4, priority: "high" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(createOperationalFollowUpTask(actor, { sourceType: "equipment", sourceId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(fake.writes).toEqual([]);
   });
 
