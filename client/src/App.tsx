@@ -11,6 +11,10 @@ import Home from "./pages/Home";
 import DepartmentSchedules from "./pages/DepartmentSchedules";
 import ManagerSettings from "./pages/ManagerSettings";
 import WhatsAppTaskRegister from "./pages/WhatsAppTaskRegister";
+import RiskRegister from "./pages/RiskRegister";
+import ManagementActions from "./pages/ManagementActions";
+import ScoringRules from "./pages/ScoringRules";
+import OperationalFollowUps from "./pages/OperationalFollowUps";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -23,6 +27,10 @@ function Router() {
       <Route path={"/my-day"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
       <Route path={"/tasks/:id"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
       <Route path={"/issues"}><AppShell view="issues" /></Route>
+      <Route path={"/risks"}><DashboardLayout><RiskRegister /></DashboardLayout></Route>
+      <Route path={"/management-actions"}><DashboardLayout><ManagementActions /></DashboardLayout></Route>
+      <Route path={"/scoring-rules"}><DashboardLayout><ScoringRules /></DashboardLayout></Route>
+      <Route path={"/operational-follow-ups"}><DashboardLayout><OperationalFollowUps /></DashboardLayout></Route>
       <Route path={"/equipment"}><AppShell view="equipment" /></Route>
       <Route path={"/inventory"}><AppShell view="inventory" /></Route>
       <Route path={"/roster"}><AppShell view="roster" /></Route>

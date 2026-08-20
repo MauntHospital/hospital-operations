@@ -71,3 +71,15 @@
 - [x] Verify the WhatsApp register, reports, and manager settings layouts on a mobile viewport.
 - [x] Verify and restore visible daily, weekly, and monthly task schedules in the manager WhatsApp workflow.
 - [x] Add clear Daily, Weekly, and Monthly manager cards showing scheduled-plan counts and tasks due today.
+- [x] Prepare and deliver a complete manager-friendly note explaining the application workflow and features.
+- [x] Review and implement the uploaded workflow instructions after confirming their application impact.
+- [x] Audit the existing schema, service layer, routes, and manager pages against the Version 2 command-center requirements.
+- [x] Add safe data-model extensions for weighted task scoring, task lifecycle events, excused outcomes, risks, management actions, and configurable operational indicators.
+- [x] Upgrade the manual WhatsApp workflow with prepared, copied, acknowledged, reviewed, and closed lifecycle tracking without automated WhatsApp communication.
+- [x] Add configurable weighted scoring, compliance calculations, excused-task handling, and department performance comparison.
+- [x] Redesign Control Tower with configurable hospital status, prioritized attention items, and cross-module operational risk signals.
+- [x] Connect inventory, equipment, roster, handover, issues, risks, and management actions through manager-confirmed operational workflows.
+- [x] Build risk-register and management-action modules with role-aware access and audit records.
+- [ ] Expand reports, response-time analytics, repeated-problem analysis, trends, search, notification center, and calendar filters.
+- [ ] Add comprehensive regression, permission, data-preservation, and responsive validation for the Version 2 workflow.
+- [ ] Prepare the required Version 2 implementation summary after validation.

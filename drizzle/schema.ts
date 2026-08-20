@@ -16,12 +16,14 @@ export const userRoles = ["super_admin", "hospital_admin", "department_head", "s
 export const taskFrequencies = ["one_time", "daily", "every_shift", "weekly", "monthly", "quarterly", "yearly", "custom"] as const;
 export const taskPriorities = ["critical", "high", "medium", "low"] as const;
 export const taskStatuses = ["not_started", "in_progress", "completed", "failed", "skipped", "overdue", "pending_approval", "reopened"] as const;
-export const whatsappDispatchStatuses = ["sent", "completed", "pending", "no_reply"] as const;
+export const whatsappDispatchStatuses = ["prepared", "copied", "sent", "acknowledged", "completed", "pending", "no_reply", "excused", "reviewed", "closed"] as const;
 export const findingStatuses = ["available", "not_available", "damaged", "expired", "low_stock", "under_maintenance", "missing", "wrong_location"] as const;
 export const issuePriorities = ["critical", "high", "medium", "low"] as const;
 export const issueStatuses = ["open", "assigned", "in_progress", "escalated", "resolved", "closed"] as const;
 export const equipmentStatuses = ["working", "damaged", "under_maintenance", "out_of_service", "retired"] as const;
 export const attendanceStatuses = ["present", "absent", "late", "leave", "replacement"] as const;
+export const riskStatuses = ["open", "mitigating", "accepted", "resolved", "closed"] as const;
+export const managementActionStatuses = ["open", "in_progress", "completed", "overdue", "cancelled"] as const;
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -86,15 +88,24 @@ export const tasks = mysqlTable("tasks", {
   frequency: mysqlEnum("frequency", taskFrequencies).notNull(),
   recurrenceRule: varchar("recurrenceRule", { length: 180 }),
   startDate: date("startDate"),
+  endDate: date("endDate"),
   dueTime: varchar("dueTime", { length: 10 }).notNull(),
   priority: mysqlEnum("priority", taskPriorities).default("medium").notNull(),
+  pointWeightTenths: int("pointWeightTenths").default(10).notNull(),
   category: varchar("category", { length: 120 }).notNull(),
   instructions: text("instructions"),
+  managerNotes: text("managerNotes"),
+  expectedCompletionMinutes: int("expectedCompletionMinutes"),
+  escalationRuleId: int("escalationRuleId"),
+  operatingDays: json("operatingDays"),
+  holidayPolicy: varchar("holidayPolicy", { length: 40 }).default("run").notNull(),
+  dependencyTaskIds: json("dependencyTaskIds"),
   evidenceRequired: boolean("evidenceRequired").default(false).notNull(),
   photoRequired: boolean("photoRequired").default(false).notNull(),
   approvalRequired: boolean("approvalRequired").default(false).notNull(),
   active: boolean("active").default(true).notNull(),
   createdBy: int("createdBy").notNull(),
+  lastModifiedBy: int("lastModifiedBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => ({
@@ -151,8 +162,14 @@ export const whatsappTaskDispatches = mysqlTable("whatsappTaskDispatches", {
   channel: varchar("channel", { length: 32 }).default("whatsapp").notNull(),
   messageText: text("messageText").notNull(),
   status: mysqlEnum("status", whatsappDispatchStatuses).default("sent").notNull(),
+  preparedAt: timestamp("preparedAt"),
+  copiedAt: timestamp("copiedAt"),
   sentAt: timestamp("sentAt").defaultNow().notNull(),
+  acknowledgedAt: timestamp("acknowledgedAt"),
   respondedAt: timestamp("respondedAt"),
+  reviewedAt: timestamp("reviewedAt"),
+  closedAt: timestamp("closedAt"),
+  excusedReason: varchar("excusedReason", { length: 120 }),
   responseNote: text("responseNote"),
   penaltyApplied: boolean("penaltyApplied").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -160,6 +177,44 @@ export const whatsappTaskDispatches = mysqlTable("whatsappTaskDispatches", {
 }, table => ({
   departmentIdx: index("whatsapp_dispatch_department_idx").on(table.departmentId),
   statusIdx: index("whatsapp_dispatch_status_idx").on(table.status),
+}));
+
+export const taskLifecycleEvents = mysqlTable("taskLifecycleEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  assignmentId: int("assignmentId").notNull(),
+  dispatchId: int("dispatchId"),
+  eventType: varchar("eventType", { length: 80 }).notNull(),
+  note: text("note"),
+  metadata: json("metadata"),
+  recordedByUserId: int("recordedByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  assignmentIdx: index("task_lifecycle_assignment_idx").on(table.assignmentId),
+  dispatchIdx: index("task_lifecycle_dispatch_idx").on(table.dispatchId),
+}));
+
+export const taskScoringRules = mysqlTable("taskScoringRules", {
+  id: int("id").autoincrement().primaryKey(),
+  priority: mysqlEnum("priority", taskPriorities).notNull().unique(),
+  weightTenths: int("weightTenths").notNull(),
+  active: boolean("active").default(true).notNull(),
+  updatedByUserId: int("updatedByUserId"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const whatsappMessageTemplates = mysqlTable("whatsappMessageTemplates", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 160 }).notNull(),
+  templateType: varchar("templateType", { length: 40 }).default("task").notNull(),
+  departmentId: int("departmentId"),
+  category: varchar("category", { length: 120 }),
+  priority: mysqlEnum("priority", taskPriorities),
+  body: text("body").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdByUserId: int("createdByUserId").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  departmentIdx: index("whatsapp_template_department_idx").on(table.departmentId),
 }));
 
 export const departmentPointEvents = mysqlTable("departmentPointEvents", {
@@ -216,6 +271,14 @@ export const issues = mysqlTable("issues", {
   reportedBy: int("reportedBy").notNull(),
   assignedTo: int("assignedTo"),
   dueAt: timestamp("dueAt"),
+  severity: varchar("severity", { length: 40 }),
+  rootCause: text("rootCause"),
+  immediateAction: text("immediateAction"),
+  correctiveAction: text("correctiveAction"),
+  preventiveAction: text("preventiveAction"),
+  verification: text("verification"),
+  verifiedBy: int("verifiedBy"),
+  verifiedAt: timestamp("verifiedAt"),
   resolution: text("resolution"),
   closedBy: int("closedBy"),
   closedAt: timestamp("closedAt"),
@@ -242,6 +305,8 @@ export const equipment = mysqlTable("equipment", {
   locationId: int("locationId"),
   manufacturer: varchar("manufacturer", { length: 160 }),
   model: varchar("model", { length: 160 }),
+  category: varchar("category", { length: 120 }),
+  criticality: mysqlEnum("criticality", taskPriorities).default("medium").notNull(),
   serialNumber: varchar("serialNumber", { length: 160 }),
   purchaseDate: date("purchaseDate"),
   warrantyExpiry: date("warrantyExpiry"),
@@ -274,11 +339,17 @@ export const equipmentMaintenance = mysqlTable("equipmentMaintenance", {
 export const inventory = mysqlTable("inventory", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 220 }).notNull(),
+  genericName: varchar("genericName", { length: 220 }),
+  brand: varchar("brand", { length: 220 }),
   category: varchar("category", { length: 120 }).notNull(),
   departmentId: int("departmentId").notNull(),
   locationId: int("locationId"),
   quantity: int("quantity").default(0).notNull(),
   reorderLevel: int("reorderLevel").default(0).notNull(),
+  minimumStock: int("minimumStock").default(0).notNull(),
+  maximumStock: int("maximumStock"),
+  supplier: varchar("supplier", { length: 180 }),
+  unitPrice: int("unitPrice"),
   unit: varchar("unit", { length: 32 }).default("units").notNull(),
   responsibleUserId: int("responsibleUserId"),
   active: boolean("active").default(true).notNull(),
@@ -316,6 +387,18 @@ export const dutyRosters = mysqlTable("dutyRosters", {
   rosterDateIdx: index("roster_date_idx").on(table.dutyDate),
 }));
 
+export const departmentStaffingTargets = mysqlTable("departmentStaffingTargets", {
+  id: int("id").autoincrement().primaryKey(),
+  departmentId: int("departmentId").notNull(),
+  shift: varchar("shift", { length: 80 }).notNull(),
+  requiredStaff: int("requiredStaff").notNull(),
+  warningCoveragePercent: int("warningCoveragePercent").default(90).notNull(),
+  criticalCoveragePercent: int("criticalCoveragePercent").default(75).notNull(),
+  active: boolean("active").default(true).notNull(),
+}, table => ({
+  departmentShiftUnique: uniqueIndex("staffing_target_department_shift_unique").on(table.departmentId, table.shift),
+}));
+
 export const shiftHandovers = mysqlTable("shiftHandovers", {
   id: int("id").autoincrement().primaryKey(),
   departmentId: int("departmentId").notNull(),
@@ -346,6 +429,67 @@ export const notifications = mysqlTable("notifications", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => ({
   recipientIdx: index("notification_recipient_idx").on(table.userId),
+}));
+
+export const operationalIndicatorRules = mysqlTable("operationalIndicatorRules", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 80 }).notNull().unique(),
+  label: varchar("label", { length: 180 }).notNull(),
+  warningThreshold: int("warningThreshold").notNull(),
+  criticalThreshold: int("criticalThreshold").notNull(),
+  active: boolean("active").default(true).notNull(),
+  updatedByUserId: int("updatedByUserId"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const risks = mysqlTable("risks", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  description: text("description").notNull(),
+  category: varchar("category", { length: 120 }).notNull(),
+  departmentId: int("departmentId").notNull(),
+  likelihood: int("likelihood").notNull(),
+  impact: int("impact").notNull(),
+  severity: mysqlEnum("severity", taskPriorities).default("medium").notNull(),
+  ownerUserId: int("ownerUserId"),
+  mitigationPlan: text("mitigationPlan"),
+  reviewDate: timestamp("reviewDate"),
+  residualRisk: int("residualRisk"),
+  status: mysqlEnum("status", riskStatuses).default("open").notNull(),
+  relatedIssueId: int("relatedIssueId"),
+  relatedTaskId: int("relatedTaskId"),
+  createdByUserId: int("createdByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  departmentIdx: index("risk_department_idx").on(table.departmentId),
+  statusIdx: index("risk_status_idx").on(table.status),
+}));
+
+export const managementActions = mysqlTable("managementActions", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 240 }).notNull(),
+  reason: text("reason"),
+  departmentId: int("departmentId").notNull(),
+  ownerUserId: int("ownerUserId"),
+  priority: mysqlEnum("priority", taskPriorities).default("medium").notNull(),
+  dueAt: timestamp("dueAt"),
+  status: mysqlEnum("status", managementActionStatuses).default("open").notNull(),
+  relatedIssueId: int("relatedIssueId"),
+  relatedRiskId: int("relatedRiskId"),
+  relatedTaskId: int("relatedTaskId"),
+  meetingReference: varchar("meetingReference", { length: 180 }),
+  completionNotes: text("completionNotes"),
+  verification: text("verification"),
+  verifiedByUserId: int("verifiedByUserId"),
+  verifiedAt: timestamp("verifiedAt"),
+  createdByUserId: int("createdByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  departmentIdx: index("management_action_department_idx").on(table.departmentId),
+  statusIdx: index("management_action_status_idx").on(table.status),
+  dueIdx: index("management_action_due_idx").on(table.dueAt),
 }));
 
 export const escalationRules = mysqlTable("escalationRules", {

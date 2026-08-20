@@ -210,29 +210,30 @@ describe("operational backend mutations", () => {
     expect(result.messageText).toMatch(/Weekly task/);
   });
 
-  it("deducts one point exactly once when an end-of-day WhatsApp task stays pending or receives no reply", async () => {
+  it("applies the configured weighted deduction exactly once when an end-of-day WhatsApp task stays pending or receives no reply", async () => {
     const initialDispatch = { id: 501, assignmentId: 77, taskId: 5, departmentId: 4, sentByUserId: admin.id, status: "sent", penaltyApplied: false };
-    const penaltyFake = makeDb([[initialDispatch]]);
+    const scoredTask = { id: 5, priority: "high", pointWeightTenths: 30 };
+    const penaltyFake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ dispatch: initialDispatch, task: scoredTask }], [{ priority: "high", weightTenths: 30 }]]);
     state.db = penaltyFake.db;
 
-    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "no_reply", note: "No WhatsApp reply by close of shift." })).resolves.toEqual({ status: "no_reply", penaltyApplied: true });
-    expect(penaltyFake.writes.some(write => (write.payload as any)?.pointDelta === -1 && (write.payload as any)?.dispatchId === 501)).toBe(true);
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "no_reply", note: "No WhatsApp reply by close of shift." })).resolves.toEqual({ status: "no_reply", penaltyApplied: true, penaltyTenths: 30 });
+    expect(penaltyFake.writes.some(write => (write.payload as any)?.pointDelta === -30 && (write.payload as any)?.dispatchId === 501)).toBe(true);
 
     const penalizedDispatch = { ...initialDispatch, status: "no_reply", penaltyApplied: true };
-    const noDuplicateFake = makeDb([[penalizedDispatch]]);
+    const noDuplicateFake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ dispatch: penalizedDispatch, task: scoredTask }]]);
     state.db = noDuplicateFake.db;
-    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "pending" })).resolves.toEqual({ status: "pending", penaltyApplied: false });
-    expect(noDuplicateFake.writes.some(write => (write.payload as any)?.pointDelta === -1)).toBe(false);
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "pending" })).resolves.toEqual({ status: "pending", penaltyApplied: false, penaltyTenths: 0 });
+    expect(noDuplicateFake.writes.some(write => (write.payload as any)?.pointDelta === -30)).toBe(false);
   });
 
   it("shows manual WhatsApp outcomes, point deductions, and report aggregates for the department scorecard", async () => {
     const now = new Date();
     const fake = makeDb([
-      [{ value: 1 }], [{ value: 1 }],
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }],
       [{ id: 77, status: "in_progress", dueAt: new Date(now.getTime() + 60_000), taskName: "Lead apron safety check", priority: "high", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id }],
       [], [], [], [], [{ id: 4, name: "Radiology", active: true }], [],
       [{ id: 501, assignmentId: 77, departmentId: 4, status: "pending" }, { id: 502, assignmentId: 78, departmentId: 4, status: "completed" }],
-      [{ id: 801, departmentId: 4, pointDelta: -1, createdAt: now }, { id: 802, departmentId: 4, pointDelta: -1, createdAt: now }],
+      [{ id: 801, departmentId: 4, pointDelta: -10, createdAt: now }, { id: 802, departmentId: 4, pointDelta: -10, createdAt: now }],
     ]);
     state.db = fake.db;
 
@@ -241,18 +242,19 @@ describe("operational backend mutations", () => {
     expect(dashboard.departmentAccountability).toEqual([expect.objectContaining({ departmentId: 4, score: 98, pointsLost: 2, dispatched: 2, completed: 1, pending: 1, awaitingReply: 0 })]);
 
     const reportFake = makeDb([
-      [{ value: 1 }], [{ value: 1 }],
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }],
       [{ id: 77, status: "in_progress", dueAt: new Date(now.getTime() + 60_000), taskName: "Lead apron safety check", priority: "high", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id }],
       [], [], [], [], [{ id: 4, name: "Radiology", active: true }], [],
       [{ id: 501, assignmentId: 77, departmentId: 4, status: "pending" }, { id: 502, assignmentId: 78, departmentId: 4, status: "completed" }],
-      [{ id: 801, departmentId: 4, pointDelta: -1, createdAt: now }, { id: 802, departmentId: 4, pointDelta: -1, createdAt: now }],
-      [{ id: 4, name: "Radiology", active: true }], [], [], [{ departmentId: 4, departmentName: "Radiology", pointDelta: -1, reason: "No WhatsApp reply", createdAt: now }],
+      [{ id: 801, departmentId: 4, pointDelta: -10, createdAt: now }, { id: 802, departmentId: 4, pointDelta: -10, createdAt: now }],
+      [], [], [], [], [], [],
+      [{ id: 4, name: "Radiology", active: true }], [], [], [{ departmentId: 4, departmentName: "Radiology", pointDelta: -10, reason: "No WhatsApp reply", createdAt: now }],
     ]);
     state.db = reportFake.db;
     const report = await getReports(admin);
     expect(report.whatsappSummary).toMatchObject({ dispatched: 2, completed: 1, pendingOrNoReply: 1, pointsLost: 2 });
     expect(report.whatsappAccountability).toEqual([expect.objectContaining({ departmentName: "Radiology", score: 98 })]);
-    expect(report.departmentPointTrends).toEqual([expect.objectContaining({ departmentName: "Radiology", events: [expect.objectContaining({ pointDelta: -1, scoreAfter: 99 })] })]);
+    expect(report.departmentPointTrends).toEqual([expect.objectContaining({ departmentName: "Radiology", events: [expect.objectContaining({ pointDelta: -10, scoreAfter: 99 })] })]);
   });
 
   it("persists the super-admin-selected Saturday or Sunday weekly schedule into the created task and assignment", async () => {

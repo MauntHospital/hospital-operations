@@ -6,7 +6,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, Si
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CalendarClock, FileBarChart, HeartPulse, LayoutDashboard, LogOut, MessageCircleMore, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
+import { AlertTriangle, CalendarClock, ClipboardList, FileBarChart, HeartPulse, LayoutDashboard, LogOut, MessageCircleMore, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
@@ -14,12 +14,16 @@ const navigation = [
   { icon: LayoutDashboard, label: "Control Tower", path: "/", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: MessageCircleMore, label: "WhatsApp tasks", path: "/whatsapp-tasks", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: ShieldAlert, label: "Issues", path: "/issues", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff", "viewer"] },
+  { icon: ShieldAlert, label: "Risk register", path: "/risks", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
+  { icon: ClipboardList, label: "Management actions", path: "/management-actions", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: Wrench, label: "Equipment", path: "/equipment", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: PackageSearch, label: "Inventory & expiry", path: "/inventory", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
+  { icon: AlertTriangle, label: "Follow-up queue", path: "/operational-follow-ups", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: CalendarClock, label: "Roster", path: "/roster", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: CalendarClock, label: "Handover", path: "/handover", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff"] },
   { icon: CalendarClock, label: "Calendar", path: "/calendar", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: FileBarChart, label: "Reports", path: "/reports", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
+  { icon: Settings2, label: "Scoring rules", path: "/scoring-rules", roles: ["super_admin", "hospital_admin"] },
   { icon: Settings2, label: "Operations setup", path: "/settings", roles: ["super_admin", "hospital_admin"] },
   { icon: CalendarClock, label: "Task schedules", path: "/department-schedules", roles: ["super_admin"] },
 ];

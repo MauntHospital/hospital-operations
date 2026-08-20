@@ -2,6 +2,8 @@ import { and, asc, count, desc, eq, gt, inArray, isNull, lt, notInArray, sql } f
 import { TRPCError } from "@trpc/server";
 import {
   auditLogs,
+  departmentPointEvents,
+  departmentStaffingTargets,
   departments,
   dutyRosters,
   equipment,
@@ -14,7 +16,9 @@ import {
   locations,
   notificationRules,
   notifications,
+  operationalIndicatorRules,
   recurringTasks,
+  risks,
   staffCredentials,
   shiftHandovers,
   staffProfiles,
@@ -22,10 +26,13 @@ import {
   taskChecklistResults,
   taskChecklists,
   taskCompletions,
+  taskLifecycleEvents,
+  taskScoringRules,
   tasks,
   users,
+  managementActions,
+  whatsappMessageTemplates,
   whatsappTaskDispatches,
-  departmentPointEvents,
   type User,
 } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -35,6 +42,7 @@ const adminRoles = ["super_admin", "hospital_admin"] as const;
 const managerRoles = ["super_admin", "hospital_admin", "department_head", "supervisor"] as const;
 
 const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);
+const pointsFromTenths = (value: number) => value / 10;
 const atTime = (hour: number, minute = 0, offsetDays = 0) => {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
@@ -64,12 +72,61 @@ async function ensureNotificationRuleDefaults() {
   ]);
 }
 
+async function ensureVersion2Defaults() {
+  const db = await requireDb();
+  const [scoringCount, indicatorCount] = await Promise.all([
+    db.select({ value: count() }).from(taskScoringRules),
+    db.select({ value: count() }).from(operationalIndicatorRules),
+  ]);
+  if ((scoringCount[0]?.value ?? 0) === 0) {
+    await db.insert(taskScoringRules).values([
+      { priority: "critical", weightTenths: 50 },
+      { priority: "high", weightTenths: 30 },
+      { priority: "medium", weightTenths: 10 },
+      { priority: "low", weightTenths: 5 },
+    ]);
+  }
+  if ((indicatorCount[0]?.value ?? 0) === 0) {
+    await db.insert(operationalIndicatorRules).values([
+      { code: "overdue_tasks", label: "Overdue tasks", warningThreshold: 1, criticalThreshold: 3 },
+      { code: "critical_issues", label: "Critical issues", warningThreshold: 1, criticalThreshold: 3 },
+      { code: "equipment_out", label: "Equipment out of service", warningThreshold: 1, criticalThreshold: 2 },
+      { code: "stock_outs", label: "Inventory stock-outs", warningThreshold: 1, criticalThreshold: 2 },
+      { code: "staffing_shortfalls", label: "Staffing shortages", warningThreshold: 1, criticalThreshold: 2 },
+      { code: "overdue_actions", label: "Overdue management actions", warningThreshold: 1, criticalThreshold: 2 },
+    ]);
+  }
+}
+
+async function writeTaskLifecycleEvent(userId: number, assignmentId: number, eventType: string, options: { dispatchId?: number | null; note?: string | null; metadata?: unknown } = {}) {
+  const db = await requireDb();
+  await db.insert(taskLifecycleEvents).values({ assignmentId, dispatchId: options.dispatchId ?? null, eventType, note: options.note ?? null, metadata: options.metadata ?? null, recordedByUserId: userId });
+}
+
 export function isManager(user: User) {
   return managerRoles.includes(user.role as (typeof managerRoles)[number]);
 }
 
 export function isAdmin(user: User) {
   return adminRoles.includes(user.role as (typeof adminRoles)[number]);
+}
+
+export async function getTaskScoringRules(user: User) {
+  ensureManager(user);
+  await ensureVersion2Defaults();
+  const db = await requireDb();
+  return db.select().from(taskScoringRules).orderBy(asc(taskScoringRules.weightTenths));
+}
+
+export async function updateTaskScoringRule(user: User, input: { ruleId: number; weightTenths: number }) {
+  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can update task-scoring rules." });
+  await ensureVersion2Defaults();
+  const db = await requireDb();
+  const rule = (await db.select().from(taskScoringRules).where(eq(taskScoringRules.id, input.ruleId)).limit(1))[0];
+  if (!rule) throw new TRPCError({ code: "NOT_FOUND", message: "Scoring rule not found." });
+  await db.update(taskScoringRules).set({ weightTenths: input.weightTenths }).where(eq(taskScoringRules.id, input.ruleId));
+  await writeAudit(user.id, "task_scoring_rule_updated", "task_scoring_rule", input.ruleId, { priority: rule.priority, weightTenths: input.weightTenths });
+  return { success: true };
 }
 
 export function ensureManager(user: User) {
@@ -217,8 +274,9 @@ export async function ensureOperationalDemo(actor: User) {
 
 export async function getDashboard(user: User) {
   await ensureOperationalDemo(user);
+  await ensureVersion2Defaults();
   const db = await requireDb();
-  const [assignmentRows, issueRows, equipmentRows, inventoryRows, expiryRows, departmentRows, notificationRows, dispatchRows, pointRows] = await Promise.all([
+  const [assignmentRows, issueRows, equipmentRows, inventoryRows, expiryRows, departmentRows, notificationRows, dispatchRows, pointRows, riskRows, managementActionRows, handoverRows, staffingTargetRows, rosterRows, indicatorRules] = await Promise.all([
     db.select({ id: taskAssignments.id, status: taskAssignments.status, dueAt: taskAssignments.dueAt, taskName: tasks.name, priority: tasks.priority, departmentId: departments.id, departmentName: departments.name, assignedUserId: taskAssignments.assignedUserId }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)),
     db.select().from(issues).orderBy(desc(issues.updatedAt)),
     db.select().from(equipment),
@@ -228,6 +286,12 @@ export async function getDashboard(user: User) {
     db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(6),
     db.select().from(whatsappTaskDispatches),
     db.select().from(departmentPointEvents),
+    db.select().from(risks),
+    db.select().from(managementActions),
+    db.select().from(shiftHandovers).where(eq(shiftHandovers.unresolved, true)),
+    db.select().from(departmentStaffingTargets).where(eq(departmentStaffingTargets.active, true)),
+    db.select().from(dutyRosters).where(eq(dutyRosters.dutyDate, new Date(dateKey()))),
+    db.select().from(operationalIndicatorRules).where(eq(operationalIndicatorRules.active, true)),
   ]);
   const now = new Date();
   const statusCounts = assignmentRows.reduce<Record<string, number>>((total, assignment) => {
@@ -235,6 +299,44 @@ export async function getDashboard(user: User) {
     total[status] = (total[status] ?? 0) + 1;
     return total;
   }, {});
+  const todayDispatches = dispatchRows.filter(row => new Date(row.createdAt).toDateString() === now.toDateString());
+  const staffingShortfalls = staffingTargetRows.map(target => {
+    const present = rosterRows.filter(row => row.departmentId === target.departmentId && row.shift === target.shift && ["present", "late", "replacement"].includes(row.attendance)).length;
+    const shortfall = Math.max(0, target.requiredStaff - present);
+    const coveragePercent = target.requiredStaff ? Math.round((present / target.requiredStaff) * 100) : 100;
+    const severity = coveragePercent <= target.criticalCoveragePercent ? "critical" : coveragePercent < target.warningCoveragePercent ? "high" : "normal";
+    return { ...target, present, shortfall, coveragePercent, severity };
+  }).filter(target => target.shortfall > 0);
+  const equipmentOutOfService = equipmentRows.filter(row => row.status === "out_of_service");
+  const maintenanceOverdue = equipmentRows.filter(row => row.nextServiceAt && new Date(row.nextServiceAt) < now);
+  const stockOuts = inventoryRows.filter(item => item.quantity === 0);
+  const lowStockItems = inventoryRows.filter(item => item.quantity > 0 && item.quantity <= Math.max(item.reorderLevel, item.minimumStock ?? 0));
+  const overdueManagementActions = managementActionRows.filter(action => !["completed", "cancelled"].includes(action.status) && action.dueAt && new Date(action.dueAt) < now);
+  const openRisks = riskRows.filter(risk => !["resolved", "closed"].includes(risk.status));
+  const indicatorValues: Record<string, number> = {
+    overdue_tasks: statusCounts.overdue ?? 0,
+    critical_issues: issueRows.filter(issue => issue.priority === "critical" && !["resolved", "closed"].includes(issue.status)).length,
+    equipment_out: equipmentOutOfService.length,
+    stock_outs: stockOuts.length,
+    staffing_shortfalls: staffingShortfalls.length,
+    overdue_actions: overdueManagementActions.length,
+  };
+  const indicatorStates = indicatorRules.map(rule => {
+    const value = indicatorValues[rule.code] ?? 0;
+    return { ...rule, value, state: value >= rule.criticalThreshold ? "critical" : value >= rule.warningThreshold ? "attention" : "normal" };
+  });
+  const operationalStatus = indicatorStates.some(rule => rule.state === "critical") ? "critical" : indicatorStates.some(rule => rule.state === "attention") ? "attention_required" : "normal";
+  const attentionItems = [
+    ...issueRows.filter(issue => !["resolved", "closed"].includes(issue.status) && ["critical", "high"].includes(issue.priority)).map(issue => ({ key: `issue-${issue.id}`, severity: issue.priority, title: issue.title, departmentId: issue.departmentId, owner: issue.assignedTo ? "Assigned manager" : "Unassigned", detail: issue.dueAt && new Date(issue.dueAt) < now ? "Overdue issue" : "Open issue", route: "/issues" })),
+    ...equipmentOutOfService.map(item => ({ key: `equipment-${item.id}`, severity: item.criticality === "critical" ? "critical" : "high", title: `${item.name} unavailable`, departmentId: item.departmentId, owner: item.responsibleUserId ? "Equipment owner" : "Maintenance", detail: "Out of service", route: "/equipment" })),
+    ...stockOuts.map(item => ({ key: `inventory-${item.id}`, severity: "high", title: `${item.name} stock-out`, departmentId: item.departmentId, owner: item.responsibleUserId ? "Inventory owner" : "Department manager", detail: "Restock decision required", route: "/inventory" })),
+    ...staffingShortfalls.map(target => ({ key: `staffing-${target.departmentId}-${target.shift}`, severity: target.severity === "critical" ? "critical" : "high", title: `${target.shift} staffing shortfall`, departmentId: target.departmentId, owner: "Department head", detail: `Required ${target.requiredStaff}; present ${target.present}`, route: "/roster" })),
+    ...overdueManagementActions.map(action => ({ key: `action-${action.id}`, severity: action.priority, title: action.title, departmentId: action.departmentId, owner: action.ownerUserId ? "Assigned manager" : "Unassigned", detail: "Management action overdue", route: "/management-actions" })),
+    ...handoverRows.map(handover => ({ key: `handover-${handover.id}`, severity: "medium", title: `${handover.shift} handover unresolved`, departmentId: handover.departmentId, owner: "Incoming shift", detail: "Handover acknowledgement required", route: "/handover" })),
+  ].sort((a, b) => {
+    const weights = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+    return weights[a.severity as keyof typeof weights] - weights[b.severity as keyof typeof weights];
+  }).slice(0, 12);
   const departmentHealth = departmentRows.map(department => {
     const group = assignmentRows.filter(row => row.departmentId === department.id);
     const overdue = group.filter(row => operationalAssignmentStatus(row.status, row.dueAt, now) === "overdue").length;
@@ -255,21 +357,32 @@ export async function getDashboard(user: User) {
     return {
       departmentId: department.id,
       departmentName: department.name,
-      score: Math.max(0, 100 + pointDelta),
-      pointsLost: Math.abs(pointDelta),
+      score: Math.max(0, 100 + pointsFromTenths(pointDelta)),
+      pointsLost: pointsFromTenths(Math.abs(pointDelta)),
       dispatched: departmentDispatches.length,
-      completed: departmentDispatches.filter(row => row.status === "completed").length,
+      completed: departmentDispatches.filter(row => ["completed", "reviewed", "closed"].includes(row.status)).length,
+      complianceRate: departmentDispatches.length ? Math.round((departmentDispatches.filter(row => ["completed", "reviewed", "closed"].includes(row.status)).length / departmentDispatches.length) * 100) : 100,
       pending: departmentDispatches.filter(row => ["pending", "no_reply"].includes(row.status)).length,
       awaitingReply: departmentDispatches.filter(row => row.status === "sent").length,
     };
   }).sort((a, b) => a.score - b.score || b.pending - a.pending);
+  const totalDispatched = departmentAccountability.reduce((total, department) => total + department.dispatched, 0);
+  const totalCompleted = departmentAccountability.reduce((total, department) => total + department.completed, 0);
   return {
-    taskCounts: { total: assignmentRows.length, completed: statusCounts.completed ?? 0, pending: (statusCounts.not_started ?? 0) + (statusCounts.in_progress ?? 0) + (statusCounts.pending_approval ?? 0), overdue: statusCounts.overdue ?? 0 },
+    operationalStatus,
+    indicatorStates,
+    attentionItems,
+    taskCounts: { total: assignmentRows.length, completed: statusCounts.completed ?? 0, pending: (statusCounts.not_started ?? 0) + (statusCounts.in_progress ?? 0) + (statusCounts.pending_approval ?? 0), overdue: statusCounts.overdue ?? 0, noReply: todayDispatches.filter(dispatch => dispatch.status === "no_reply").length, awaitingReply: todayDispatches.filter(dispatch => ["sent", "acknowledged"].includes(dispatch.status)).length },
     issueCounts: { critical: issueRows.filter(issue => issue.priority === "critical" && !["resolved", "closed"].includes(issue.status)).length, high: issueRows.filter(issue => issue.priority === "high" && !["resolved", "closed"].includes(issue.status)).length, open: issueRows.filter(issue => !["resolved", "closed"].includes(issue.status)).length },
-    equipmentCounts: { total: equipmentRows.length, working: equipmentRows.filter(row => row.status === "working").length, attention: equipmentRows.filter(row => row.status !== "working").length },
-    inventoryCounts: { shortages: inventoryRows.filter(item => item.quantity <= item.reorderLevel).length, expiringSoon: (expiryCounts.within_30_days ?? 0) + (expiryCounts.within_60_days ?? 0), expired: expiryCounts.expired ?? 0 },
+    equipmentCounts: { total: equipmentRows.length, working: equipmentRows.filter(row => row.status === "working").length, attention: equipmentRows.filter(row => row.status !== "working").length, outOfService: equipmentOutOfService.length, maintenanceOverdue: maintenanceOverdue.length },
+    inventoryCounts: { shortages: inventoryRows.filter(item => item.quantity <= Math.max(item.reorderLevel, item.minimumStock ?? 0)).length, stockOuts: stockOuts.length, lowStock: lowStockItems.length, expiringSoon: (expiryCounts.within_30_days ?? 0) + (expiryCounts.within_60_days ?? 0), expired: expiryCounts.expired ?? 0 },
+    riskCounts: { critical: openRisks.filter(risk => risk.severity === "critical").length, high: openRisks.filter(risk => risk.severity === "high").length, open: openRisks.length },
+    staffingCounts: { shortages: staffingShortfalls.length, required: staffingTargetRows.reduce((total, row) => total + row.requiredStaff, 0), present: staffingTargetRows.reduce((total, target) => total + (staffingShortfalls.find(shortfall => shortfall.id === target.id)?.present ?? target.requiredStaff), 0) },
+    handoverCounts: { unresolved: handoverRows.length },
+    managementActionCounts: { overdue: overdueManagementActions.length, open: managementActionRows.filter(action => !["completed", "cancelled"].includes(action.status)).length },
     departmentHealth,
     departmentAccountability,
+    complianceSummary: { hospitalRate: totalDispatched ? Math.round((totalCompleted / totalDispatched) * 100) : 100, dispatched: totalDispatched, completed: totalCompleted },
     notifications: notificationRows,
     recentAssignments: assignmentRows.slice(0, 6).map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.status, row.dueAt, now) })),
   };
@@ -285,7 +398,7 @@ export async function getMyDay(user: User) {
   return { tasks: active, counts: { total: active.length, overdue: active.filter(row => row.effectiveStatus === "overdue").length, completed: active.filter(row => row.effectiveStatus === "completed").length, pending: active.filter(row => !["completed", "overdue"].includes(row.effectiveStatus)).length } };
 }
 
-type WhatsAppDispatchOutcome = "completed" | "pending" | "no_reply";
+type WhatsAppDispatchOutcome = "completed" | "pending" | "no_reply" | "excused";
 
 function whatsappTaskMessage(input: { taskName: string; departmentName: string; dueAt: Date; frequency: string }) {
   const due = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(input.dueAt));
@@ -296,6 +409,7 @@ function whatsappTaskMessage(input: { taskName: string; departmentName: string; 
 export async function getWhatsAppTaskRegister(user: User) {
   ensureManager(user);
   await ensureOperationalDemo(user);
+  await ensureVersion2Defaults();
   const db = await requireDb();
   const now = new Date();
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -309,7 +423,7 @@ export async function getWhatsAppTaskRegister(user: User) {
   const scorecards = departmentRows.map(department => {
     const events = pointRows.filter(event => event.departmentId === department.id && new Date(event.createdAt) >= monthStart);
     const pointsLost = events.reduce((total, event) => total + Math.abs(event.pointDelta), 0);
-    return { departmentId: department.id, departmentName: department.name, score: Math.max(0, 100 - pointsLost), pointsLost };
+    return { departmentId: department.id, departmentName: department.name, score: Math.max(0, 100 - pointsFromTenths(pointsLost)), pointsLost: pointsFromTenths(pointsLost) };
   }).sort((a, b) => a.score - b.score);
   const cadenceSummary = (["daily", "weekly", "monthly"] as const).map(frequency => {
     const schedules = scheduleRows.filter(row => row.task.frequency === frequency);
@@ -325,35 +439,110 @@ export async function getWhatsAppTaskRegister(user: User) {
   return {
     tasks: rows.map(row => ({ ...row, suggestedMessage: whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt, frequency: row.task.frequency }) })),
     scorecards,
-    summary: { sent: rows.filter(row => row.dispatch?.status === "sent").length, completed: rows.filter(row => row.dispatch?.status === "completed").length, pending: rows.filter(row => ["pending", "no_reply"].includes(row.dispatch?.status ?? "")).length, notSent: rows.filter(row => !row.dispatch).length },
+    summary: {
+      sent: rows.filter(row => row.dispatch && !["prepared", "copied"].includes(row.dispatch.status)).length,
+      completed: rows.filter(row => row.dispatch?.status === "completed" || row.dispatch?.status === "reviewed" || row.dispatch?.status === "closed").length,
+      pending: rows.filter(row => ["pending", "no_reply"].includes(row.dispatch?.status ?? "")).length,
+      excused: rows.filter(row => row.dispatch?.status === "excused").length,
+      awaitingAcknowledgement: rows.filter(row => row.dispatch?.status === "sent").length,
+      notSent: rows.filter(row => !row.dispatch || ["prepared", "copied"].includes(row.dispatch.status)).length,
+    },
     cadenceSummary,
   };
 }
 
-export async function dispatchWhatsAppTask(user: User, input: { assignmentId: number; messageText?: string }) {
+async function getWhatsAppTaskContext(assignmentId: number) {
+  const db = await requireDb();
+  const row = (await db.select({ assignment: taskAssignments, task: tasks, department: departments }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).where(eq(taskAssignments.id, assignmentId)).limit(1))[0];
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Task assignment not found." });
+  return row;
+}
+
+export async function prepareWhatsAppTask(user: User, input: { assignmentId: number; messageText?: string }) {
   ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
-  const row = (await db.select({ assignment: taskAssignments, task: tasks, department: departments }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).where(eq(taskAssignments.id, input.assignmentId)).limit(1))[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Task assignment not found." });
+  const row = await getWhatsAppTaskContext(input.assignmentId);
   const existing = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
   const messageText = input.messageText?.trim() || whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt, frequency: row.task.frequency });
-  if (existing) return { dispatchId: existing.id, messageText: existing.messageText, alreadyDispatched: true };
-  const created = await db.insert(whatsappTaskDispatches).values({ assignmentId: row.assignment.id, taskId: row.task.id, departmentId: row.department.id, sentByUserId: user.id, messageText }).$returningId();
-  await writeAudit(user.id, "whatsapp_task_dispatched", "task_assignment", row.assignment.id, { dispatchId: created[0]!.id, departmentId: row.department.id });
-  return { dispatchId: created[0]!.id, messageText, alreadyDispatched: false };
+  if (existing) return { dispatchId: existing.id, messageText: existing.messageText, status: existing.status, alreadyPrepared: true };
+  const created = await db.insert(whatsappTaskDispatches).values({ assignmentId: row.assignment.id, taskId: row.task.id, departmentId: row.department.id, sentByUserId: user.id, messageText, status: "prepared", preparedAt: new Date() }).$returningId();
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "prepared", { dispatchId: created[0]!.id, metadata: { departmentId: row.department.id } });
+  await writeAudit(user.id, "whatsapp_task_prepared", "task_assignment", row.assignment.id, { dispatchId: created[0]!.id, departmentId: row.department.id });
+  return { dispatchId: created[0]!.id, messageText, status: "prepared", alreadyPrepared: false };
 }
 
-export async function recordWhatsAppTaskOutcome(user: User, input: { dispatchId: number; outcome: WhatsAppDispatchOutcome; note?: string }) {
+export async function recordWhatsAppTaskCopied(user: User, input: { dispatchId: number }) {
   ensureManager(user);
   const db = await requireDb();
   const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
   if (!dispatch) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
+  if (dispatch.status === "prepared") {
+    await db.update(whatsappTaskDispatches).set({ status: "copied", copiedAt: new Date() }).where(eq(whatsappTaskDispatches.id, dispatch.id));
+    await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, "copied", { dispatchId: dispatch.id });
+    await writeAudit(user.id, "whatsapp_task_copied", "whatsapp_dispatch", dispatch.id, {});
+  }
+  return { status: dispatch.status === "prepared" ? "copied" : dispatch.status };
+}
+
+export async function dispatchWhatsAppTask(user: User, input: { assignmentId: number; messageText?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const prepared = await prepareWhatsAppTask(user, input);
+  if (!["prepared", "copied"].includes(prepared.status)) return { dispatchId: prepared.dispatchId, messageText: prepared.messageText, alreadyDispatched: true };
+  const now = new Date();
+  await db.update(whatsappTaskDispatches).set({ status: "sent", sentAt: now, messageText: prepared.messageText }).where(eq(whatsappTaskDispatches.id, prepared.dispatchId));
+  await writeTaskLifecycleEvent(user.id, input.assignmentId, "sent", { dispatchId: prepared.dispatchId });
+  await writeAudit(user.id, "whatsapp_task_dispatched", "task_assignment", input.assignmentId, { dispatchId: prepared.dispatchId });
+  return { dispatchId: prepared.dispatchId, messageText: prepared.messageText, alreadyDispatched: prepared.status === "sent" };
+}
+
+export async function acknowledgeWhatsAppTask(user: User, input: { dispatchId: number; note?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
+  if (!dispatch) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
+  if (["prepared", "copied"].includes(dispatch.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Confirm the manual WhatsApp send before recording acknowledgement." });
+  await db.update(whatsappTaskDispatches).set({ status: "acknowledged", acknowledgedAt: new Date(), responseNote: input.note?.trim() || dispatch.responseNote }).where(eq(whatsappTaskDispatches.id, dispatch.id));
+  await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, "acknowledged", { dispatchId: dispatch.id, note: input.note });
+  await writeAudit(user.id, "whatsapp_task_acknowledged", "whatsapp_dispatch", dispatch.id, { note: input.note });
+  return { status: "acknowledged" as const };
+}
+
+export async function recordWhatsAppTaskOutcome(user: User, input: { dispatchId: number; outcome: WhatsAppDispatchOutcome; note?: string; excusedReason?: string }) {
+  ensureManager(user);
+  await ensureVersion2Defaults();
+  const db = await requireDb();
+  const row = (await db.select({ dispatch: whatsappTaskDispatches, task: tasks }).from(whatsappTaskDispatches).innerJoin(tasks, eq(whatsappTaskDispatches.taskId, tasks.id)).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
+  const dispatch = row.dispatch;
+  if (input.outcome === "excused" && !input.excusedReason?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Select or record an excused-task reason." });
   const shouldPenaltyApply = ["pending", "no_reply"].includes(input.outcome) && !dispatch.penaltyApplied;
-  await db.update(whatsappTaskDispatches).set({ status: input.outcome, respondedAt: new Date(), responseNote: input.note?.trim() || null, penaltyApplied: dispatch.penaltyApplied || shouldPenaltyApply }).where(eq(whatsappTaskDispatches.id, dispatch.id));
-  if (shouldPenaltyApply) await db.insert(departmentPointEvents).values({ departmentId: dispatch.departmentId, dispatchId: dispatch.id, pointDelta: -1, reason: input.outcome === "no_reply" ? "No end-of-day response to WhatsApp task" : "Task remained pending at end of day", recordedByUserId: user.id });
-  await writeAudit(user.id, "whatsapp_task_outcome_recorded", "whatsapp_dispatch", dispatch.id, { outcome: input.outcome, penaltyApplied: shouldPenaltyApply });
-  return { status: input.outcome, penaltyApplied: shouldPenaltyApply };
+  const now = new Date();
+  await db.update(whatsappTaskDispatches).set({ status: input.outcome, respondedAt: now, responseNote: input.note?.trim() || null, excusedReason: input.outcome === "excused" ? input.excusedReason!.trim() : null, penaltyApplied: dispatch.penaltyApplied || shouldPenaltyApply }).where(eq(whatsappTaskDispatches.id, dispatch.id));
+  let penaltyTenths = 0;
+  if (shouldPenaltyApply) {
+    const scoringRule = (await db.select().from(taskScoringRules).where(eq(taskScoringRules.priority, row.task.priority)).limit(1))[0];
+    penaltyTenths = scoringRule?.weightTenths ?? row.task.pointWeightTenths;
+    await db.insert(departmentPointEvents).values({ departmentId: dispatch.departmentId, dispatchId: dispatch.id, pointDelta: -penaltyTenths, reason: input.outcome === "no_reply" ? "No end-of-day response to WhatsApp task" : "Task remained pending at end of day", recordedByUserId: user.id });
+  }
+  await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, input.outcome, { dispatchId: dispatch.id, note: input.note, metadata: { excusedReason: input.excusedReason ?? null, penaltyTenths } });
+  await writeAudit(user.id, "whatsapp_task_outcome_recorded", "whatsapp_dispatch", dispatch.id, { outcome: input.outcome, penaltyApplied: shouldPenaltyApply, penaltyTenths, excusedReason: input.excusedReason ?? null });
+  return { status: input.outcome, penaltyApplied: shouldPenaltyApply, penaltyTenths };
+}
+
+export async function reviewWhatsAppTask(user: User, input: { dispatchId: number; close?: boolean; note?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
+  if (!dispatch) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
+  if (!["completed", "pending", "no_reply", "excused", "reviewed", "closed"].includes(dispatch.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Record a department outcome before reviewing this task." });
+  const now = new Date();
+  const status = input.close ? "closed" : "reviewed";
+  await db.update(whatsappTaskDispatches).set({ status, reviewedAt: now, closedAt: input.close ? now : dispatch.closedAt, responseNote: input.note?.trim() || dispatch.responseNote }).where(eq(whatsappTaskDispatches.id, dispatch.id));
+  await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, status, { dispatchId: dispatch.id, note: input.note });
+  await writeAudit(user.id, `whatsapp_task_${status}`, "whatsapp_dispatch", dispatch.id, { note: input.note });
+  return { status };
 }
 
 export async function getTaskDetail(user: User, assignmentId: number) {
@@ -463,6 +652,60 @@ export async function resolveIssue(user: User, input: { issueId: number; resolut
   return { success: true };
 }
 
+export async function getRiskRegister(user: User) {
+  ensureManager(user);
+  const db = await requireDb();
+  const rows = await db.select({ risk: risks, departmentName: departments.name }).from(risks).innerJoin(departments, eq(risks.departmentId, departments.id)).orderBy(desc(risks.updatedAt));
+  return rows.map(row => ({ ...row, riskScore: row.risk.likelihood * row.risk.impact, reviewOverdue: Boolean(row.risk.reviewDate && new Date(row.risk.reviewDate) < new Date() && !["resolved", "closed"].includes(row.risk.status)) }));
+}
+
+export async function createRisk(user: User, input: { description: string; category: string; departmentId: number; likelihood: number; impact: number; ownerUserId?: number; mitigationPlan?: string; reviewDate?: Date; relatedIssueId?: number; relatedTaskId?: number }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const score = input.likelihood * input.impact;
+  const severity = score >= 16 ? "critical" : score >= 10 ? "high" : score >= 5 ? "medium" : "low" as const;
+  const created = await db.insert(risks).values({ code: `RSK-${String(Date.now()).slice(-6)}`, description: input.description, category: input.category, departmentId: input.departmentId, likelihood: input.likelihood, impact: input.impact, severity, ownerUserId: input.ownerUserId ?? null, mitigationPlan: input.mitigationPlan ?? null, reviewDate: input.reviewDate ?? null, relatedIssueId: input.relatedIssueId ?? null, relatedTaskId: input.relatedTaskId ?? null, createdByUserId: user.id }).$returningId();
+  await writeAudit(user.id, "risk_created", "risk", created[0]!.id, { ...input, severity, score });
+  return { id: created[0]!.id, severity, score };
+}
+
+export async function updateRisk(user: User, input: { riskId: number; status: "open" | "mitigating" | "accepted" | "resolved" | "closed"; mitigationPlan?: string; residualRisk?: number; reviewDate?: Date }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const current = (await db.select().from(risks).where(eq(risks.id, input.riskId)).limit(1))[0];
+  if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "Risk record not found." });
+  await db.update(risks).set({ status: input.status, mitigationPlan: input.mitigationPlan ?? current.mitigationPlan, residualRisk: input.residualRisk ?? current.residualRisk, reviewDate: input.reviewDate ?? current.reviewDate }).where(eq(risks.id, input.riskId));
+  await writeAudit(user.id, "risk_updated", "risk", input.riskId, input);
+  return { success: true };
+}
+
+export async function getManagementActions(user: User) {
+  ensureManager(user);
+  const db = await requireDb();
+  const now = new Date();
+  const rows = await db.select({ action: managementActions, departmentName: departments.name }).from(managementActions).innerJoin(departments, eq(managementActions.departmentId, departments.id)).orderBy(desc(managementActions.updatedAt));
+  return rows.map(row => ({ ...row, effectiveStatus: !["completed", "cancelled"].includes(row.action.status) && row.action.dueAt && new Date(row.action.dueAt) < now ? "overdue" : row.action.status }));
+}
+
+export async function createManagementAction(user: User, input: { title: string; reason?: string; departmentId: number; ownerUserId?: number; priority: "critical" | "high" | "medium" | "low"; dueAt?: Date; relatedIssueId?: number; relatedRiskId?: number; relatedTaskId?: number; meetingReference?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const created = await db.insert(managementActions).values({ title: input.title, reason: input.reason ?? null, departmentId: input.departmentId, ownerUserId: input.ownerUserId ?? null, priority: input.priority, dueAt: input.dueAt ?? null, relatedIssueId: input.relatedIssueId ?? null, relatedRiskId: input.relatedRiskId ?? null, relatedTaskId: input.relatedTaskId ?? null, meetingReference: input.meetingReference ?? null, createdByUserId: user.id }).$returningId();
+  await writeAudit(user.id, "management_action_created", "management_action", created[0]!.id, input);
+  return { id: created[0]!.id };
+}
+
+export async function updateManagementAction(user: User, input: { actionId: number; status: "open" | "in_progress" | "completed" | "overdue" | "cancelled"; completionNotes?: string; verification?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const action = (await db.select().from(managementActions).where(eq(managementActions.id, input.actionId)).limit(1))[0];
+  if (!action) throw new TRPCError({ code: "NOT_FOUND", message: "Management action not found." });
+  const verified = Boolean(input.verification?.trim());
+  await db.update(managementActions).set({ status: input.status, completionNotes: input.completionNotes ?? action.completionNotes, verification: input.verification ?? action.verification, verifiedByUserId: verified ? user.id : action.verifiedByUserId, verifiedAt: verified ? new Date() : action.verifiedAt }).where(eq(managementActions.id, input.actionId));
+  await writeAudit(user.id, "management_action_updated", "management_action", input.actionId, input);
+  return { success: true };
+}
+
 export async function getIssueHistory(user: User, issueId: number) {
   await ensureOperationalDemo(user);
   const db = await requireDb();
@@ -527,7 +770,7 @@ export async function getReports(user: User) {
     departmentPointTrends: dashboard.departmentAccountability.map(department => {
       let runningScore = 100;
       const events = (eventsByDepartment.get(department.departmentId) ?? []).map(event => {
-        runningScore += event.pointDelta;
+        runningScore += pointsFromTenths(event.pointDelta);
         return { ...event, scoreAfter: runningScore };
       });
       return { departmentId: department.departmentId, departmentName: department.departmentName, currentScore: department.score, events };
@@ -596,6 +839,43 @@ export async function createEquipmentMaintenance(user: User, input: { equipmentI
   await db.update(equipment).set({ status: "under_maintenance", nextServiceAt: input.scheduledAt }).where(eq(equipment.id, input.equipmentId));
   await writeAudit(user.id, "maintenance_scheduled", "equipment_maintenance", created[0]!.id, { equipmentId: input.equipmentId, scheduledAt: input.scheduledAt.toISOString() });
   return { id: created[0]!.id };
+}
+
+export async function createOperationalFollowUpTask(user: User, input: { sourceType: "inventory" | "expiry" | "equipment"; sourceId: number }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const dueAt = new Date();
+  dueAt.setHours(dueAt.getHours() + 4, 0, 0, 0);
+  let taskName = "Operational follow-up";
+  let departmentId = 0;
+  let category = "Operational follow-up";
+  let priority: "critical" | "high" | "medium" | "low" = "high";
+  if (input.sourceType === "inventory") {
+    const item = (await db.select().from(inventory).where(eq(inventory.id, input.sourceId)).limit(1))[0];
+    if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Inventory item not found." });
+    taskName = `Restock: ${item.name}`;
+    departmentId = item.departmentId;
+    category = "Inventory check";
+    priority = item.quantity === 0 ? "critical" : "high";
+  } else if (input.sourceType === "expiry") {
+    const item = (await db.select().from(expiryItems).where(eq(expiryItems.id, input.sourceId)).limit(1))[0];
+    if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Expiry item not found." });
+    taskName = `Expiry review: ${item.name}`;
+    departmentId = item.departmentId;
+    category = "Inventory check";
+  } else {
+    const item = (await db.select().from(equipment).where(eq(equipment.id, input.sourceId)).limit(1))[0];
+    if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Equipment record not found." });
+    taskName = `Equipment follow-up: ${item.name}`;
+    departmentId = item.departmentId;
+    category = "Equipment check";
+    priority = item.criticality === "critical" || item.status === "out_of_service" ? "critical" : "high";
+  }
+  const dueTime = `${String(dueAt.getHours()).padStart(2, "0")}:${String(dueAt.getMinutes()).padStart(2, "0")}`;
+  const taskId = (await db.insert(tasks).values({ name: taskName, departmentId, frequency: "one_time", dueTime, priority, category, instructions: `Manager-confirmed follow-up created from ${input.sourceType} record #${input.sourceId}.`, active: true, createdBy: user.id, lastModifiedBy: user.id }).$returningId())[0]!.id;
+  const assignmentId = (await db.insert(taskAssignments).values({ taskId, departmentId, dueAt, status: "not_started" }).$returningId())[0]!.id;
+  await writeAudit(user.id, "operational_follow_up_task_created", "task_assignment", assignmentId, { ...input, taskId });
+  return { taskId, assignmentId };
 }
 
 export async function updateDutyAttendance(user: User, input: { rosterId: number; attendance: "present" | "absent" | "late" | "leave" | "replacement"; replacementUserId?: number; notes?: string }) {
