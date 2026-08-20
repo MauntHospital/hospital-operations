@@ -54,6 +54,7 @@ const actor: User = {
 const admin: User = { ...actor, id: 1, openId: "admin-user", role: "hospital_admin" };
 const superAdmin: User = { ...actor, id: 2, openId: "super-admin-user", role: "super_admin" };
 const supervisor: User = { ...actor, id: 3, openId: "supervisor-user", role: "supervisor" };
+const viewer: User = { ...actor, id: 4, openId: "viewer-user", role: "viewer" };
 
 const detail = {
   assignment: { id: 77, taskId: 5, departmentId: 4, assignedUserId: 7, dueAt: new Date("2026-08-19T09:00:00.000Z"), status: "not_started" },
@@ -313,6 +314,14 @@ describe("operational backend mutations", () => {
     const fake = makeDb([[]]);
     state.db = fake.db;
     await expect(getRiskRegister(supervisor)).resolves.toEqual([]);
+  });
+
+  it("denies viewer roles from Version 2 management read paths", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(getRiskRegister(viewer)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(getManagementActions(viewer)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(getTaskScoringRules(viewer)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("keeps a pre-Version-2 sent WhatsApp dispatch visible in the manager register", async () => {

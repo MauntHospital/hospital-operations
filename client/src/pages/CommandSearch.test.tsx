@@ -23,4 +23,12 @@ describe("CommandSearch", () => {
     expect(container.textContent).toContain("Generator outage");
     expect(container.textContent).toContain("Test backup generator");
   });
+
+  it("filters results interactively across connected modules", () => {
+    act(() => root.render(<CommandSearch />));
+    const input = container.querySelector("input") as HTMLInputElement;
+    act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "generator"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(container.textContent).toContain("Generator outage");
+    expect(container.textContent).not.toContain("Emergency Defibrillator");
+  });
 });
