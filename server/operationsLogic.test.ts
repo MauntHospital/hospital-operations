@@ -26,6 +26,8 @@ describe("hospital operational workflow logic", () => {
     expect(taskCompletionBlockReason({ requiredChecklistCount: 3, completedChecklistCount: 2, evidenceRequired: false })).toMatch(/1 remaining/);
     expect(taskCompletionBlockReason({ requiredChecklistCount: 3, completedChecklistCount: 3, evidenceRequired: true })).toMatch(/evidence is required/i);
     expect(taskCompletionBlockReason({ requiredChecklistCount: 3, completedChecklistCount: 3, evidenceRequired: true, evidenceUrl: "https://evidence.example/task-1.jpg" })).toBeNull();
+    expect(taskCompletionBlockReason({ requiredChecklistCount: 3, completedChecklistCount: 3, evidenceRequired: false, photoRequired: true })).toMatch(/photo reference/i);
+    expect(taskCompletionBlockReason({ requiredChecklistCount: 3, completedChecklistCount: 3, evidenceRequired: false, photoRequired: true, evidenceUrl: "https://evidence.example/task-1.jpg" })).toBeNull();
   });
 
   it("retains final task statuses but marks unfinished past-due work as overdue", () => {

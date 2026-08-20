@@ -114,6 +114,64 @@ describe("operational backend mutations", () => {
     expect(fake.writes.some(write => write.kind === "update" && (write.payload as any)?.status === "completed" && (write.payload as any)?.completedAt instanceof Date)).toBe(true);
   });
 
+  it("completes two separate ready assignments in sequence without retaining the first task state", async () => {
+    const firstResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };
+    const secondDetail = { ...detail, assignment: { ...detail.assignment, id: 78, taskId: 6 }, task: { ...detail.task, id: 6, name: "Radiation barrier inspection" } };
+    const secondChecklist = { ...requiredChecklist, id: 13, taskId: 6, label: "Barrier is intact" };
+    const secondResult = { id: 19, assignmentId: 78, checklistId: 13, status: "available" };
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [detail], [requiredChecklist], [firstResult],
+      [{ value: 1 }], [{ value: 1 }], [secondDetail], [secondChecklist], [secondResult],
+    ]);
+    state.db = fake.db;
+
+    await expect(completeTask(actor, { assignmentId: 77 })).resolves.toEqual({ status: "completed" });
+    await expect(completeTask(actor, { assignmentId: 78 })).resolves.toEqual({ status: "completed" });
+
+    const completionWrites = fake.writes.filter(write => write.kind === "update" && (write.payload as any)?.status === "completed");
+    expect(completionWrites).toHaveLength(2);
+    expect(fake.writes.filter(write => (write.payload as any)?.assignmentId === 77 || (write.payload as any)?.assignmentId === 78).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("refreshes My Day between two task completions and accepts required evidence for the second task", async () => {
+    const dueAt = new Date(Date.now() + 60 * 60_000);
+    const firstDetail = { ...detail, assignment: { ...detail.assignment, id: 77, dueAt, status: "in_progress" }, task: { ...detail.task, evidenceRequired: false, photoRequired: false, frequency: "daily", priority: "high" } };
+    const secondDetail = { ...detail, assignment: { ...detail.assignment, id: 78, taskId: 6, dueAt, status: "in_progress" }, task: { ...detail.task, id: 6, name: "Radiation barrier inspection", evidenceRequired: true, photoRequired: true, frequency: "daily", priority: "high" } };
+    const firstResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };
+    const secondChecklist = { ...requiredChecklist, id: 13, taskId: 6, label: "Barrier is intact" };
+    const secondResult = { id: 19, assignmentId: 78, checklistId: 13, status: "available" };
+    const beforeCompletion = [
+      { assignment: firstDetail.assignment, task: firstDetail.task, departmentName: "Radiology" },
+      { assignment: secondDetail.assignment, task: secondDetail.task, departmentName: "Radiology" },
+    ];
+    const afterFirstCompletion = [
+      { assignment: { ...firstDetail.assignment, status: "completed", completedAt: new Date() }, task: firstDetail.task, departmentName: "Radiology" },
+      { assignment: secondDetail.assignment, task: secondDetail.task, departmentName: "Radiology" },
+    ];
+    const afterSecondCompletion = afterFirstCompletion.map(row => row.assignment.id === 78 ? { ...row, assignment: { ...row.assignment, status: "completed", completedAt: new Date() } } : row);
+    const profile = { userId: actor.id, departmentId: 4, active: true };
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [profile], beforeCompletion,
+      [{ value: 1 }], [{ value: 1 }], [firstDetail], [requiredChecklist], [firstResult],
+      [{ value: 1 }], [{ value: 1 }], [profile], afterFirstCompletion,
+      [{ value: 1 }], [{ value: 1 }], [secondDetail], [secondChecklist], [secondResult],
+      [{ value: 1 }], [{ value: 1 }], [profile], afterSecondCompletion,
+    ]);
+    state.db = fake.db;
+
+    expect((await getMyDay(actor)).counts.completed).toBe(0);
+    await expect(completeTask(actor, { assignmentId: 77 })).resolves.toEqual({ status: "completed" });
+    const afterFirstRefresh = await getMyDay(actor);
+    expect(afterFirstRefresh.counts.completed).toBe(1);
+    expect(afterFirstRefresh.tasks.find(row => row.assignment.id === 78)?.effectiveStatus).toBe("in_progress");
+
+    await expect(completeTask(actor, { assignmentId: 78, evidenceUrl: "https://evidence.example/radiation-barrier.jpg" })).resolves.toEqual({ status: "completed" });
+    const afterSecondRefresh = await getMyDay(actor);
+    expect(afterSecondRefresh.counts.completed).toBe(2);
+    expect(afterSecondRefresh.counts.pending).toBe(0);
+    expect(fake.writes.some(write => (write.payload as any)?.assignmentId === 78 && (write.payload as any)?.evidenceUrl === "https://evidence.example/radiation-barrier.jpg")).toBe(true);
+  });
+
   it("shows a completed status in refreshed My Day after submitting an overdue assignment", async () => {
     const overdueDetail = { ...detail, assignment: { ...detail.assignment, status: "overdue", dueAt: new Date() }, task: { ...detail.task, evidenceRequired: false, approvalRequired: false, frequency: "daily", priority: "high" } };
     const recordedResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };

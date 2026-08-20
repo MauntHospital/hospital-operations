@@ -66,9 +66,9 @@ export function initialTaskDueDate(frequency: string, dueTime: string, weeklyDay
   return dueAt;
 }
 
-export function taskCompletionBlockReason(input: { requiredChecklistCount: number; completedChecklistCount: number; evidenceRequired: boolean; evidenceUrl?: string }) {
+export function taskCompletionBlockReason(input: { requiredChecklistCount: number; completedChecklistCount: number; evidenceRequired: boolean; photoRequired?: boolean; evidenceUrl?: string }) {
   const remaining = input.requiredChecklistCount - input.completedChecklistCount;
   if (remaining > 0) return `Complete all required checklist items before submitting (${remaining} remaining).`;
-  if (input.evidenceRequired && !input.evidenceUrl) return "Evidence is required for this task.";
+  if ((input.evidenceRequired || input.photoRequired) && !input.evidenceUrl) return input.photoRequired ? "An evidence or photo reference is required for this task." : "Evidence is required for this task.";
   return null;
 }

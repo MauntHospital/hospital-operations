@@ -49,3 +49,7 @@
 - [x] Fix overdue assignments so completing the required checklist and submitting the task records a Completed status instead of leaving it Overdue.
 - [x] Add regression coverage for overdue task completion and verify the status refresh in My Day.
 - [x] Add an integration test proving an overdue assignment changes to Completed in the refreshed My Day result after valid task submission.
+- [x] Fix the Mark as completed button so it remains functional when staff complete more than one eligible task in a session.
+- [x] Add service-level regression coverage for completing two separate ready task assignments sequentially.
+- [x] Add required evidence-reference capture and a visible completion blocker for tasks that require evidence or a photo.
+- [x] Verify the My Day component flow: complete one task, refresh My Day, open a second task, provide required evidence where applicable, and complete it successfully.

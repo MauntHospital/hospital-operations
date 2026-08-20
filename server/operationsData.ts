@@ -317,7 +317,7 @@ export async function completeTask(user: User, input: { assignmentId: number; no
   const db = await requireDb();
   const detail = await getTaskDetail(user, input.assignmentId);
   const requiredChecklist = detail.checklist.filter(item => item.required);
-  const completionBlock = taskCompletionBlockReason({ requiredChecklistCount: requiredChecklist.length, completedChecklistCount: requiredChecklist.filter(item => item.result).length, evidenceRequired: detail.task.evidenceRequired, evidenceUrl: input.evidenceUrl });
+  const completionBlock = taskCompletionBlockReason({ requiredChecklistCount: requiredChecklist.length, completedChecklistCount: requiredChecklist.filter(item => item.result).length, evidenceRequired: detail.task.evidenceRequired, photoRequired: detail.task.photoRequired, evidenceUrl: input.evidenceUrl });
   if (completionBlock) throw new TRPCError({ code: "BAD_REQUEST", message: completionBlock });
   const needsApproval = detail.task.approvalRequired;
   const finalStatus = needsApproval ? "pending_approval" : "completed" as const;
