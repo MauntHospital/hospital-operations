@@ -302,6 +302,7 @@ export async function getWhatsAppTaskRegister(user: User) {
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
   const rows = await db.select({ assignment: taskAssignments, task: tasks, department: departments, dispatch: whatsappTaskDispatches }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)).where(and(gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)), lt(taskAssignments.dueAt, dayEnd), inArray(tasks.frequency, ["daily", "weekly", "monthly"]))).orderBy(asc(taskAssignments.dueAt));
+  const scheduleRows = await db.select({ task: tasks, department: departments }).from(tasks).innerJoin(departments, eq(tasks.departmentId, departments.id)).where(and(eq(tasks.active, true), inArray(tasks.frequency, ["daily", "weekly", "monthly"]))).orderBy(asc(tasks.name));
   const pointRows = await db.select().from(departmentPointEvents);
   const departmentRows = await db.select().from(departments).where(eq(departments.active, true));
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -310,10 +311,22 @@ export async function getWhatsAppTaskRegister(user: User) {
     const pointsLost = events.reduce((total, event) => total + Math.abs(event.pointDelta), 0);
     return { departmentId: department.id, departmentName: department.name, score: Math.max(0, 100 - pointsLost), pointsLost };
   }).sort((a, b) => a.score - b.score);
+  const cadenceSummary = (["daily", "weekly", "monthly"] as const).map(frequency => {
+    const schedules = scheduleRows.filter(row => row.task.frequency === frequency);
+    const dueToday = rows.filter(row => row.task.frequency === frequency);
+    return {
+      frequency,
+      scheduledPlanCount: schedules.length,
+      dueTodayCount: dueToday.length,
+      scheduledPlans: schedules.map(row => ({ taskId: row.task.id, taskName: row.task.name, departmentName: row.department.name, dueTime: row.task.dueTime, recurrenceRule: row.task.recurrenceRule })),
+      dueTodayTasks: dueToday.map(row => ({ assignmentId: row.assignment.id, taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt })),
+    };
+  });
   return {
     tasks: rows.map(row => ({ ...row, suggestedMessage: whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt, frequency: row.task.frequency }) })),
     scorecards,
     summary: { sent: rows.filter(row => row.dispatch?.status === "sent").length, completed: rows.filter(row => row.dispatch?.status === "completed").length, pending: rows.filter(row => ["pending", "no_reply"].includes(row.dispatch?.status ?? "")).length, notSent: rows.filter(row => !row.dispatch).length },
+    cadenceSummary,
   };
 }
 

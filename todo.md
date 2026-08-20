@@ -69,3 +69,5 @@
 - [x] Add regression and responsive coverage for the fully consolidated manager-only workflow.
 - [x] Add current-month department point-trend history to manager reports with regression coverage.
 - [x] Verify the WhatsApp register, reports, and manager settings layouts on a mobile viewport.
+- [x] Verify and restore visible daily, weekly, and monthly task schedules in the manager WhatsApp workflow.
+- [x] Add clear Daily, Weekly, and Monthly manager cards showing scheduled-plan counts and tasks due today.

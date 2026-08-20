@@ -37,6 +37,11 @@ const makeRegisterData = (dispatch: any = null) => ({
   summary: { sent: dispatch?.status === "sent" ? 1 : 0, completed: dispatch?.status === "completed" ? 1 : 0, pending: 0, notSent: dispatch ? 0 : 1 },
   scorecards: [{ departmentId: 4, departmentName: "Radiology", score: 100, pointsLost: 0 }],
   tasks: [makeRow(dispatch)],
+  cadenceSummary: [
+    { frequency: "daily" as const, scheduledPlanCount: 2, dueTodayCount: 1, scheduledPlans: [{ taskId: 5, taskName: "Lead apron safety check", departmentName: "Radiology", dueTime: "09:00", recurrenceRule: null }], dueTodayTasks: [{ assignmentId: 77, taskName: "Lead apron safety check", departmentName: "Radiology", dueAt: new Date("2026-08-20T09:00:00.000Z") }] },
+    { frequency: "weekly" as const, scheduledPlanCount: 1, dueTodayCount: 0, scheduledPlans: [{ taskId: 6, taskName: "Weekend readiness review", departmentName: "Radiology", dueTime: "10:00", recurrenceRule: "weekly:saturday" }], dueTodayTasks: [] },
+    { frequency: "monthly" as const, scheduledPlanCount: 1, dueTodayCount: 0, scheduledPlans: [{ taskId: 7, taskName: "Monthly attendance review", departmentName: "Radiology", dueTime: "11:00", recurrenceRule: null }], dueTodayTasks: [] },
+  ],
 });
 
 describe("WhatsAppTaskRegister manager workflow", () => {
@@ -98,5 +103,15 @@ describe("WhatsAppTaskRegister manager workflow", () => {
     expect(container.textContent).toContain("Daily");
     expect(container.textContent).toContain("Weekly");
     expect(container.textContent).toContain("Monthly");
+  });
+
+  it("shows daily, weekly, and monthly schedule cards even when a cadence has no task due today", () => {
+    act(() => root.render(<WhatsAppTaskRegister />));
+
+    expect(container.textContent).toContain("Daily tasks");
+    expect(container.textContent).toContain("Weekly tasks");
+    expect(container.textContent).toContain("Monthly tasks");
+    expect(container.textContent).toContain("Weekend readiness review");
+    expect(container.textContent).toContain("0 due today");
   });
 });
