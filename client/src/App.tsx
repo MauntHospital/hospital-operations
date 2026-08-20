@@ -16,6 +16,7 @@ import ManagementActions from "./pages/ManagementActions";
 import ScoringRules from "./pages/ScoringRules";
 import OperationalFollowUps from "./pages/OperationalFollowUps";
 import CommandSearch from "./pages/CommandSearch";
+import ReportsInsights from "./pages/ReportsInsights";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -37,7 +38,7 @@ function Router() {
       <Route path={"/inventory"}><AppShell view="inventory" /></Route>
       <Route path={"/roster"}><AppShell view="roster" /></Route>
       <Route path={"/handover"}><AppShell view="handover" /></Route>
-      <Route path={"/reports"}><AppShell view="reports" /></Route>
+      <Route path={"/reports"}><DashboardLayout><ReportsInsights /></DashboardLayout></Route>
       <Route path={"/calendar"}><AppShell view="calendar" /></Route>
       <Route path={"/settings"}><DashboardLayout><ManagerSettings /></DashboardLayout></Route>
       <Route path={"/operations"}><AppShell view="overview" /></Route>
