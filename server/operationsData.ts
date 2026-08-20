@@ -748,11 +748,12 @@ export async function getReports(user: User) {
   const reportMonthStart = new Date();
   reportMonthStart.setDate(1);
   reportMonthStart.setHours(0, 0, 0, 0);
-  const [departmentRows, rosterRows, issueRows, pointEventRows] = await Promise.all([
+  const [departmentRows, rosterRows, issueRows, pointEventRows, dispatchTimingRows] = await Promise.all([
     db.select().from(departments).where(eq(departments.active, true)),
     db.select().from(dutyRosters).where(eq(dutyRosters.dutyDate, new Date(dateKey()))),
     db.select().from(issues),
     db.select({ departmentId: departmentPointEvents.departmentId, departmentName: departments.name, pointDelta: departmentPointEvents.pointDelta, reason: departmentPointEvents.reason, createdAt: departmentPointEvents.createdAt }).from(departmentPointEvents).innerJoin(departments, eq(departmentPointEvents.departmentId, departments.id)).where(gt(departmentPointEvents.createdAt, new Date(reportMonthStart.getTime() - 1))).orderBy(asc(departmentPointEvents.createdAt)),
+    db.select({ sentAt: whatsappTaskDispatches.sentAt, acknowledgedAt: whatsappTaskDispatches.acknowledgedAt, respondedAt: whatsappTaskDispatches.respondedAt }).from(whatsappTaskDispatches).where(gt(whatsappTaskDispatches.sentAt, new Date(reportMonthStart.getTime() - 1))),
   ]);
   const eventsByDepartment = new Map<number, typeof pointEventRows>();
   for (const event of pointEventRows) eventsByDepartment.set(event.departmentId, [...(eventsByDepartment.get(event.departmentId) ?? []), event]);
@@ -768,6 +769,12 @@ export async function getReports(user: User) {
       pointsLost: dashboard.departmentAccountability.reduce((total, department) => total + department.pointsLost, 0),
     },
     complianceSummary: dashboard.complianceSummary,
+    responseTimeAnalytics: {
+      acknowledgedCount: dispatchTimingRows.filter(row => row.acknowledgedAt).length,
+      respondedCount: dispatchTimingRows.filter(row => row.respondedAt).length,
+      averageAcknowledgementMinutes: (() => { const values = dispatchTimingRows.filter(row => row.acknowledgedAt).map(row => (new Date(row.acknowledgedAt!).getTime() - new Date(row.sentAt).getTime()) / 60_000); return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null; })(),
+      averageResponseMinutes: (() => { const values = dispatchTimingRows.filter(row => row.respondedAt).map(row => (new Date(row.respondedAt!).getTime() - new Date(row.sentAt).getTime()) / 60_000); return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null; })(),
+    },
     repeatedProblemTrends: Object.entries(issueRows.reduce<Record<string, number>>((counts, issue) => { counts[issue.category] = (counts[issue.category] ?? 0) + 1; return counts; }, {})).map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
     departmentPointTrends: dashboard.departmentAccountability.map(department => {
       let runningScore = 100;
