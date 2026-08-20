@@ -6,9 +6,10 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, Si
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CalendarClock, ClipboardCheck, FileBarChart, HeartPulse, LayoutDashboard, LogOut, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
+import { AlertTriangle, CalendarClock, ClipboardCheck, FileBarChart, HeartPulse, KeyRound, LayoutDashboard, LogOut, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { PasswordChangeGate } from "./PasswordChangeGate";
 
 const navigation = [
   { icon: LayoutDashboard, label: "Control Tower", path: "/", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
@@ -21,12 +22,15 @@ const navigation = [
   { icon: CalendarClock, label: "Calendar", path: "/calendar", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: FileBarChart, label: "Reports", path: "/reports", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: Settings2, label: "Operations setup", path: "/settings", roles: ["super_admin", "hospital_admin"] },
+  { icon: KeyRound, label: "Staff accounts", path: "/staff-accounts", roles: ["super_admin", "hospital_admin"] },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { loading, user } = useAuth();
+  const [, setLocation] = useLocation();
   if (loading) return <DashboardLayoutSkeleton />;
-  if (!user) return <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-700 text-white"><HeartPulse className="h-6 w-6" /></div><h1 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">Hospital Operations</h1><p className="mt-2 text-sm leading-relaxed text-slate-500">Sign in to open your role-based operational workspace.</p><Button onClick={() => startLogin()} className="mt-6 w-full bg-teal-700 hover:bg-teal-800">Sign in securely</Button></div></div>;
+  if (!user) return <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-700 text-white"><HeartPulse className="h-6 w-6" /></div><h1 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">Hospital Operations</h1><p className="mt-2 text-sm leading-relaxed text-slate-500">Sign in to open your role-based operational workspace.</p><Button onClick={() => setLocation("/login")} className="mt-6 w-full bg-teal-700 hover:bg-teal-800">Sign in with staff account</Button><Button variant="outline" onClick={() => startLogin()} className="mt-3 w-full">Use existing secure sign-in</Button></div></div>;
+  if (user.mustChangePassword) return <PasswordChangeGate />;
   return <SidebarProvider><DashboardContent>{children}</DashboardContent></SidebarProvider>;
 }
 

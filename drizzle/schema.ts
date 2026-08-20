@@ -64,6 +64,17 @@ export const staffProfiles = mysqlTable("staffProfiles", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const staffCredentials = mysqlTable("staffCredentials", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  username: varchar("username", { length: 64 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  mustChangePassword: boolean("mustChangePassword").default(true).notNull(),
+  passwordChangedAt: timestamp("passwordChangedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const tasks = mysqlTable("tasks", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 220 }).notNull(),

@@ -15,6 +15,7 @@ import {
   notificationRules,
   notifications,
   recurringTasks,
+  staffCredentials,
   shiftHandovers,
   staffProfiles,
   taskAssignments,
@@ -27,6 +28,7 @@ import {
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { computeNextDueDate, expiryHealth, findingCreatesIssue, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason, type FindingStatus } from "./operationsLogic";
+import { hashPassword, normalizeUsername, passwordPolicyError, verifyPassword } from "./localAuth";
 
 const adminRoles = ["super_admin", "hospital_admin"] as const;
 const managerRoles = ["super_admin", "hospital_admin", "department_head", "supervisor"] as const;
@@ -421,15 +423,69 @@ export async function manageDepartment(user: User, input: { name: string; code: 
   return { id: created[0]!.id };
 }
 
-export async function manageStaff(user: User, input: { name: string; email?: string; departmentId: number; role: "hospital_admin" | "department_head" | "supervisor" | "staff" | "viewer"; title?: string }) {
+export async function manageStaff(user: User, input: { name: string; email?: string; departmentId: number; role: "hospital_admin" | "department_head" | "supervisor" | "staff" | "viewer"; title?: string; username?: string; temporaryPassword?: string }) {
   if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can add staff." });
   const db = await requireDb();
+  const hasCredentials = Boolean(input.username || input.temporaryPassword);
+  if (hasCredentials && (!input.username || !input.temporaryPassword)) throw new TRPCError({ code: "BAD_REQUEST", message: "Provide both an account name and a temporary password." });
+  const username = input.username ? normalizeUsername(input.username) : null;
+  const passwordError = input.temporaryPassword ? passwordPolicyError(input.temporaryPassword) : null;
+  if (username && !/^[a-z0-9._-]{3,64}$/.test(username)) throw new TRPCError({ code: "BAD_REQUEST", message: "Account name must use 3–64 lower-case letters, numbers, dots, hyphens, or underscores." });
+  if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
   const openId = `staff-${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
   const created = await db.insert(users).values({ openId, name: input.name, email: input.email ?? null, loginMethod: "managed", role: input.role }).$returningId();
   const userId = created[0]!.id;
   await db.insert(staffProfiles).values({ userId, departmentId: input.departmentId, employeeCode: `EMP-${String(userId).padStart(4, "0")}`, title: input.title ?? null });
-  await writeAudit(user.id, "staff_added", "user", userId, { departmentId: input.departmentId, role: input.role });
-  return { id: userId };
+  if (username && input.temporaryPassword) {
+    try {
+      await db.insert(staffCredentials).values({ userId, username, passwordHash: await hashPassword(input.temporaryPassword), mustChangePassword: true });
+    } catch (error) {
+      await db.delete(staffProfiles).where(eq(staffProfiles.userId, userId));
+      await db.delete(users).where(eq(users.id, userId));
+      throw new TRPCError({ code: "CONFLICT", message: "That account name is already in use." });
+    }
+  }
+  await writeAudit(user.id, "staff_added", "user", userId, { departmentId: input.departmentId, role: input.role, username });
+  return { id: userId, username };
+}
+
+export async function resetStaffPassword(user: User, input: { userId: number; temporaryPassword: string }) {
+  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can reset staff passwords." });
+  const passwordError = passwordPolicyError(input.temporaryPassword);
+  if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
+  const db = await requireDb();
+  const credential = (await db.select().from(staffCredentials).where(eq(staffCredentials.userId, input.userId)).limit(1))[0];
+  if (!credential) throw new TRPCError({ code: "NOT_FOUND", message: "This staff member does not have a local account." });
+  await db.update(staffCredentials).set({ passwordHash: await hashPassword(input.temporaryPassword), mustChangePassword: true, passwordChangedAt: new Date() }).where(eq(staffCredentials.userId, input.userId));
+  await writeAudit(user.id, "staff_password_reset", "user", input.userId, {});
+  return { success: true };
+}
+
+export async function authenticateStaffAccount(input: { username: string; password: string }) {
+  const db = await requireDb();
+  const username = normalizeUsername(input.username);
+  const row = (await db.select({ user: users, profile: staffProfiles, credential: staffCredentials }).from(staffCredentials).innerJoin(users, eq(staffCredentials.userId, users.id)).leftJoin(staffProfiles, eq(users.id, staffProfiles.userId)).where(eq(staffCredentials.username, username)).limit(1))[0];
+  const invalid = () => { throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid account name or password." }); };
+  if (!row || !row.profile?.active || !(await verifyPassword(input.password, row.credential.passwordHash))) invalid();
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, row.user.id));
+  return { user: row.user, mustChangePassword: row.credential.mustChangePassword };
+}
+
+export async function changeStaffPassword(user: User, input: { currentPassword: string; newPassword: string }) {
+  const passwordError = passwordPolicyError(input.newPassword);
+  if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
+  const db = await requireDb();
+  const credential = (await db.select().from(staffCredentials).where(eq(staffCredentials.userId, user.id)).limit(1))[0];
+  if (!credential || !(await verifyPassword(input.currentPassword, credential.passwordHash))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Current password is incorrect." });
+  await db.update(staffCredentials).set({ passwordHash: await hashPassword(input.newPassword), mustChangePassword: false, passwordChangedAt: new Date() }).where(eq(staffCredentials.userId, user.id));
+  await writeAudit(user.id, "staff_password_changed", "user", user.id, {});
+  return { success: true };
+}
+
+export async function passwordChangeRequired(userId: number) {
+  const db = await requireDb();
+  const credential = (await db.select({ mustChangePassword: staffCredentials.mustChangePassword }).from(staffCredentials).where(eq(staffCredentials.userId, userId)).limit(1))[0];
+  return credential?.mustChangePassword ?? false;
 }
 
 export async function setDepartmentActive(user: User, input: { departmentId: number; active: boolean }) {
@@ -532,7 +588,7 @@ export async function getSettings(user: User) {
     db.select().from(escalationRules).orderBy(asc(escalationRules.name)),
     db.select().from(notificationRules).orderBy(asc(notificationRules.label)),
     db.select().from(departments).orderBy(asc(departments.name)),
-    db.select({ user: users, profile: staffProfiles }).from(users).leftJoin(staffProfiles, eq(users.id, staffProfiles.userId)).orderBy(asc(users.name)),
+    db.select({ user: users, profile: staffProfiles, credential: { username: staffCredentials.username, mustChangePassword: staffCredentials.mustChangePassword } }).from(users).leftJoin(staffProfiles, eq(users.id, staffProfiles.userId)).leftJoin(staffCredentials, eq(users.id, staffCredentials.userId)).orderBy(asc(users.name)),
   ]);
   return { rules, notificationRules: notificationRuleRows, departments: departmentRows, staff: people };
 }

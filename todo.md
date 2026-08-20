@@ -21,3 +21,10 @@
 - [x] Add visual duty-roster availability and handover indicators with accessible hover/focus tooltips.
 - [x] Add Control Tower task filtering for priority and overdue status, with task sorting controls.
 - [x] Add targeted test coverage and responsive visual verification for the roster and Control Tower enhancements.
+- [x] Add a secure local staff credential model with unique account names, password hashes, activation state, and first-login password change support.
+- [x] Add manager-facing staff account provisioning and credential reset controls without exposing stored passwords.
+- [x] Add an account-name and password sign-in screen alongside the existing sign-in option, with role-based daily-task access after authentication.
+- [x] Add authentication and authorization tests for local staff sign-in, manager provisioning, password reset, and daily-task access.
+- [x] Keep invalid local sign-in and current-password failures on the password flows instead of initiating the existing OAuth sign-in redirect.
+- [x] Add explicit non-administrator authorization-denial coverage for staff account provisioning and password reset.
+- [x] Add session-cookie procedure tests for local sign-in and first-login password change behavior.

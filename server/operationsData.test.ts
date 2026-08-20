@@ -7,7 +7,14 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, saveChecklistResult } from "./operationsData";
+vi.mock("./localAuth", () => ({
+  normalizeUsername: (value: string) => value.trim().toLowerCase(),
+  passwordPolicyError: (value: string) => value.length >= 12 ? null : "Use at least 12 characters for the temporary password.",
+  hashPassword: async () => "scrypt$test$hash",
+  verifyPassword: async (value: string) => value === "AValidPassword2026",
+}));
+
+import { authenticateStaffAccount, completeTask, getMyDay, manageStaff, resetStaffPassword, saveChecklistResult } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -34,6 +41,7 @@ function makeDb(selectResults: any[][]) {
       },
     }),
     update: () => ({ set: () => ({ where: async () => ({}) }) }),
+    delete: () => ({ where: async () => ({}) }),
   };
   return { db, writes };
 }
@@ -49,6 +57,8 @@ const actor: User = {
   updatedAt: new Date(),
   lastSignedIn: new Date(),
 };
+
+const admin: User = { ...actor, id: 1, openId: "admin-user", role: "hospital_admin" };
 
 const detail = {
   assignment: { id: 77, taskId: 5, departmentId: 4, assignedUserId: 7, dueAt: new Date("2026-08-19T09:00:00.000Z"), status: "not_started" },
@@ -89,5 +99,53 @@ describe("operational backend mutations", () => {
     state.db = fake.db;
 
     await expect(completeTask(actor, { assignmentId: 77 })).rejects.toMatchObject({ message: expect.stringMatching(/required checklist items/i) });
+  });
+
+  it("lets a manager provision a staff profile with a hashed local account credential", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+
+    const result = await manageStaff(admin, { name: "Priya Nair", departmentId: 4, role: "staff", username: "Priya.Nair", temporaryPassword: "AValidPassword2026" });
+
+    expect(result).toEqual({ id: 501, username: "priya.nair" });
+    expect(fake.writes.some(write => (write.payload as any)?.username === "priya.nair" && (write.payload as any)?.passwordHash === "scrypt$test$hash")).toBe(true);
+  });
+
+  it("denies non-administrators from provisioning accounts or resetting staff passwords", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(manageStaff(actor, { name: "Priya Nair", departmentId: 4, role: "staff", username: "priya.nair", temporaryPassword: "AValidPassword2026" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(resetStaffPassword(actor, { userId: 11, temporaryPassword: "AValidPassword2026" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("verifies an active local account, supports a password reset, and denies inactive account access", async () => {
+    const localUser = { ...actor, id: 11, openId: "staff-11", name: "Priya Nair" };
+    const active = makeDb([[{ user: localUser, profile: { active: true }, credential: { passwordHash: "scrypt$test$hash", mustChangePassword: true } }]]);
+    state.db = active.db;
+    await expect(authenticateStaffAccount({ username: "PRIYA.NAIR", password: "AValidPassword2026" })).resolves.toMatchObject({ user: localUser, mustChangePassword: true });
+
+    const reset = makeDb([[{ userId: 11, passwordHash: "scrypt$test$hash" }]]);
+    state.db = reset.db;
+    await expect(resetStaffPassword(admin, { userId: 11, temporaryPassword: "AValidPassword2026" })).resolves.toEqual({ success: true });
+
+    const inactive = makeDb([[{ user: localUser, profile: { active: false }, credential: { passwordHash: "scrypt$test$hash", mustChangePassword: false } }]]);
+    state.db = inactive.db;
+    await expect(authenticateStaffAccount({ username: "priya.nair", password: "AValidPassword2026" })).rejects.toMatchObject({ message: expect.stringMatching(/invalid account name or password/i) });
+  });
+
+  it("returns a staff member's daily task queue after local-account authentication", async () => {
+    const staffTask = { assignment: { id: 88, taskId: 6, departmentId: 4, assignedUserId: actor.id, dueAt: new Date("2026-08-20T11:00:00.000Z"), status: "not_started" }, task: { id: 6, name: "Portable oxygen check", priority: "high" }, departmentName: "Radiology" };
+    const fake = makeDb([
+      [{ value: 1 }],
+      [{ value: 1 }],
+      [{ userId: actor.id, departmentId: 4, active: true }],
+      [staffTask],
+    ]);
+    state.db = fake.db;
+
+    const day = await getMyDay(actor);
+
+    expect(day.counts.total).toBe(1);
+    expect(day.tasks[0]).toMatchObject({ task: { name: "Portable oxygen check" }, departmentName: "Radiology" });
   });
 });
