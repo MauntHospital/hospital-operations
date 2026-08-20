@@ -39,3 +39,5 @@
 - [x] Add a super-admin department schedule workspace for daily, weekly, and monthly task plans.
 - [x] Show department-specific recurring task schedules with task counts, owner, next run, and active status.
 - [x] Add permission and department-schedule validation tests plus responsive visual verification.
+- [x] Make the Emergency and Daily My Day task-card lists independently scrollable with clear scroll affordances.
+- [x] Verify the scrollable My Day card behavior on desktop and mobile.
