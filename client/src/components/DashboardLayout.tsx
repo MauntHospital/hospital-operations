@@ -6,7 +6,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, Si
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CalendarClock, ClipboardCheck, FileBarChart, HeartPulse, KeyRound, LayoutDashboard, LogOut, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
+import { AlertTriangle, CalendarClock, ClipboardCheck, FileBarChart, HeartPulse, KeyRound, LayoutDashboard, LogOut, MessageCircleMore, PackageSearch, PanelLeft, Settings2, ShieldAlert, Wrench } from "lucide-react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { PasswordChangeGate } from "./PasswordChangeGate";
@@ -14,6 +14,7 @@ import { PasswordChangeGate } from "./PasswordChangeGate";
 const navigation = [
   { icon: LayoutDashboard, label: "Control Tower", path: "/", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: ClipboardCheck, label: "My Day", path: "/my-day", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff", "viewer"] },
+  { icon: MessageCircleMore, label: "WhatsApp tasks", path: "/whatsapp-tasks", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: ShieldAlert, label: "Issues", path: "/issues", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff", "viewer"] },
   { icon: Wrench, label: "Equipment", path: "/equipment", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: PackageSearch, label: "Inventory & expiry", path: "/inventory", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },

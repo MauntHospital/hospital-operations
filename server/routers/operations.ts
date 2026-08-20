@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { assignIssue, completeTask, createEquipmentMaintenance, createExpiryItem, createHandover, createInventoryItem, createIssue, createTask, getCalendar, getDashboard, getDepartmentTaskSchedules, getIssueHistory, getMyDay, getOperationsModules, getReports, getSettings, getTaskDetail, listIssues, manageDepartment, manageStaff, resetStaffPassword, resolveIssue, saveChecklistResult, setDepartmentActive, setStaffActive, updateDepartment, updateDutyAttendance, updateEscalationRule, updateNotificationRule, updateStaff } from "../operationsData";
+import { assignIssue, completeTask, createEquipmentMaintenance, createExpiryItem, createHandover, createInventoryItem, createIssue, createTask, dispatchWhatsAppTask, getCalendar, getDashboard, getDepartmentTaskSchedules, getIssueHistory, getMyDay, getOperationsModules, getReports, getSettings, getTaskDetail, getWhatsAppTaskRegister, listIssues, manageDepartment, manageStaff, recordWhatsAppTaskOutcome, resetStaffPassword, resolveIssue, saveChecklistResult, setDepartmentActive, setStaffActive, updateDepartment, updateDutyAttendance, updateEscalationRule, updateNotificationRule, updateStaff } from "../operationsData";
 
 const priority = z.enum(["critical", "high", "medium", "low"]);
 const frequency = z.enum(["one_time", "daily", "every_shift", "weekly", "monthly", "quarterly", "yearly", "custom"]);
@@ -8,6 +8,7 @@ const finding = z.enum(["available", "not_available", "damaged", "expired", "low
 
 export const operationsRouter = router({
   dashboard: protectedProcedure.query(({ ctx }) => getDashboard(ctx.user)),
+  whatsappTaskRegister: protectedProcedure.query(({ ctx }) => getWhatsAppTaskRegister(ctx.user)),
   departmentSchedules: protectedProcedure.query(({ ctx }) => getDepartmentTaskSchedules(ctx.user)),
   myDay: protectedProcedure.query(({ ctx }) => getMyDay(ctx.user)),
   modules: protectedProcedure.query(({ ctx }) => getOperationsModules(ctx.user)),
@@ -16,6 +17,8 @@ export const operationsRouter = router({
   taskCreate: protectedProcedure.input(z.object({ name: z.string().min(3).max(220), description: z.string().max(3000).optional(), departmentId: z.number().int().positive(), assignedUserId: z.number().int().positive().optional(), frequency, dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), weeklyDay: z.enum(["saturday", "sunday"]).optional(), priority, category: z.string().min(2).max(120), instructions: z.string().max(5000).optional(), evidenceRequired: z.boolean().optional(), photoRequired: z.boolean().optional(), approvalRequired: z.boolean().optional(), checklist: z.array(z.string().max(300)).max(24) })).mutation(({ ctx, input }) => createTask(ctx.user, input)),
   checklistSave: protectedProcedure.input(z.object({ assignmentId: z.number().int().positive(), checklistId: z.number().int().positive(), status: finding, note: z.string().max(2000).optional(), evidenceUrl: z.string().url().optional() })).mutation(({ ctx, input }) => saveChecklistResult(ctx.user, input)),
   taskComplete: protectedProcedure.input(z.object({ assignmentId: z.number().int().positive(), notes: z.string().max(3000).optional(), evidenceUrl: z.string().url().optional() })).mutation(({ ctx, input }) => completeTask(ctx.user, input)),
+  whatsappTaskDispatch: protectedProcedure.input(z.object({ assignmentId: z.number().int().positive(), messageText: z.string().min(1).max(5000).optional() })).mutation(({ ctx, input }) => dispatchWhatsAppTask(ctx.user, input)),
+  whatsappTaskOutcome: protectedProcedure.input(z.object({ dispatchId: z.number().int().positive(), outcome: z.enum(["completed", "pending", "no_reply"]), note: z.string().max(3000).optional() })).mutation(({ ctx, input }) => recordWhatsAppTaskOutcome(ctx.user, input)),
   issues: protectedProcedure.query(({ ctx }) => listIssues(ctx.user)),
   issueCreate: protectedProcedure.input(z.object({ title: z.string().min(3).max(240), description: z.string().max(3000).optional(), departmentId: z.number().int().positive(), category: z.string().min(2).max(120), priority, dueAt: z.date().optional() })).mutation(({ ctx, input }) => createIssue(ctx.user, input)),
   issueAssign: protectedProcedure.input(z.object({ issueId: z.number().int().positive(), assignedTo: z.number().int().positive(), dueAt: z.date().optional() })).mutation(({ ctx, input }) => assignIssue(ctx.user, input)),

@@ -16,6 +16,7 @@ export const userRoles = ["super_admin", "hospital_admin", "department_head", "s
 export const taskFrequencies = ["one_time", "daily", "every_shift", "weekly", "monthly", "quarterly", "yearly", "custom"] as const;
 export const taskPriorities = ["critical", "high", "medium", "low"] as const;
 export const taskStatuses = ["not_started", "in_progress", "completed", "failed", "skipped", "overdue", "pending_approval", "reopened"] as const;
+export const whatsappDispatchStatuses = ["sent", "completed", "pending", "no_reply"] as const;
 export const findingStatuses = ["available", "not_available", "damaged", "expired", "low_stock", "under_maintenance", "missing", "wrong_location"] as const;
 export const issuePriorities = ["critical", "high", "medium", "low"] as const;
 export const issueStatuses = ["open", "assigned", "in_progress", "escalated", "resolved", "closed"] as const;
@@ -139,6 +140,38 @@ export const taskAssignments = mysqlTable("taskAssignments", {
   assigneeIdx: index("assignment_assignee_idx").on(table.assignedUserId),
   dueIdx: index("assignment_due_idx").on(table.dueAt),
   taskIdx: index("assignment_task_idx").on(table.taskId),
+}));
+
+export const whatsappTaskDispatches = mysqlTable("whatsappTaskDispatches", {
+  id: int("id").autoincrement().primaryKey(),
+  assignmentId: int("assignmentId").notNull().unique(),
+  taskId: int("taskId").notNull(),
+  departmentId: int("departmentId").notNull(),
+  sentByUserId: int("sentByUserId").notNull(),
+  channel: varchar("channel", { length: 32 }).default("whatsapp").notNull(),
+  messageText: text("messageText").notNull(),
+  status: mysqlEnum("status", whatsappDispatchStatuses).default("sent").notNull(),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  respondedAt: timestamp("respondedAt"),
+  responseNote: text("responseNote"),
+  penaltyApplied: boolean("penaltyApplied").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  departmentIdx: index("whatsapp_dispatch_department_idx").on(table.departmentId),
+  statusIdx: index("whatsapp_dispatch_status_idx").on(table.status),
+}));
+
+export const departmentPointEvents = mysqlTable("departmentPointEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  departmentId: int("departmentId").notNull(),
+  dispatchId: int("dispatchId").notNull().unique(),
+  pointDelta: int("pointDelta").notNull(),
+  reason: varchar("reason", { length: 240 }).notNull(),
+  recordedByUserId: int("recordedByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  departmentIdx: index("department_point_event_department_idx").on(table.departmentId),
 }));
 
 export const taskChecklistResults = mysqlTable("taskChecklistResults", {

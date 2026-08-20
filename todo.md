@@ -53,3 +53,9 @@
 - [x] Add service-level regression coverage for completing two separate ready task assignments sequentially.
 - [x] Add required evidence-reference capture and a visible completion blocker for tasks that require evidence or a photo.
 - [x] Verify the My Day component flow: complete one task, refresh My Day, open a second task, provide required evidence where applicable, and complete it successfully.
+- [x] Add a manager-led WhatsApp task register for manual department distribution without WhatsApp API integration.
+- [x] Add end-of-day reply logging with completed, pending, and no-reply outcomes for dispatched tasks.
+- [x] Apply a single department point deduction to unresolved end-of-day tasks and show a meeting-ready department scorecard on the dashboard.
+- [x] Add tests and responsive verification for manual dispatch, outcome recording, pending status, and point calculations.
+- [x] Add a visible WhatsApp message preview and safe manual-copy fallback before a dispatch is recorded as sent.
+- [x] Add component-level coverage for manager dispatch, end-of-day outcome recording, and scorecard refresh.

@@ -14,7 +14,7 @@ vi.mock("./localAuth", () => ({
   verifyPassword: async (value: string) => value === "AValidPassword2026",
 }));
 
-import { authenticateStaffAccount, completeTask, createTask, getMyDay, manageStaff, resetStaffPassword, runOperationalCycle, saveChecklistResult } from "./operationsData";
+import { authenticateStaffAccount, completeTask, createTask, dispatchWhatsAppTask, getDashboard, getMyDay, manageStaff, recordWhatsAppTaskOutcome, resetStaffPassword, runOperationalCycle, saveChecklistResult } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -189,6 +189,51 @@ describe("operational backend mutations", () => {
     expect(refreshed.tasks[0]).toMatchObject({ assignment: { id: 77, status: "completed" }, effectiveStatus: "completed" });
     expect(refreshed.counts.completed).toBe(1);
     expect(refreshed.counts.overdue).toBe(0);
+  });
+
+  it("records a manager-sent WhatsApp task with a copy-ready department message", async () => {
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [detail], [],
+    ]);
+    state.db = fake.db;
+
+    const result = await dispatchWhatsAppTask(admin, { assignmentId: 77 });
+
+    expect(result).toMatchObject({ dispatchId: 501, alreadyDispatched: false });
+    expect(result.messageText).toMatch(/Radiology/);
+    expect(result.messageText).toMatch(/Lead apron safety check/);
+    expect(fake.writes.some(write => (write.payload as any)?.assignmentId === 77 && (write.payload as any)?.channel === undefined)).toBe(true);
+  });
+
+  it("deducts one point exactly once when an end-of-day WhatsApp task stays pending or receives no reply", async () => {
+    const initialDispatch = { id: 501, assignmentId: 77, taskId: 5, departmentId: 4, sentByUserId: admin.id, status: "sent", penaltyApplied: false };
+    const penaltyFake = makeDb([[initialDispatch]]);
+    state.db = penaltyFake.db;
+
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "no_reply", note: "No WhatsApp reply by close of shift." })).resolves.toEqual({ status: "no_reply", penaltyApplied: true });
+    expect(penaltyFake.writes.some(write => (write.payload as any)?.pointDelta === -1 && (write.payload as any)?.dispatchId === 501)).toBe(true);
+
+    const penalizedDispatch = { ...initialDispatch, status: "no_reply", penaltyApplied: true };
+    const noDuplicateFake = makeDb([[penalizedDispatch]]);
+    state.db = noDuplicateFake.db;
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "pending" })).resolves.toEqual({ status: "pending", penaltyApplied: false });
+    expect(noDuplicateFake.writes.some(write => (write.payload as any)?.pointDelta === -1)).toBe(false);
+  });
+
+  it("shows manual WhatsApp outcomes and point deductions on the department dashboard scorecard", async () => {
+    const now = new Date();
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }],
+      [{ id: 77, status: "in_progress", dueAt: new Date(now.getTime() + 60_000), taskName: "Lead apron safety check", priority: "high", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id }],
+      [], [], [], [], [{ id: 4, name: "Radiology", active: true }], [],
+      [{ id: 501, assignmentId: 77, departmentId: 4, status: "pending" }, { id: 502, assignmentId: 78, departmentId: 4, status: "completed" }],
+      [{ id: 801, departmentId: 4, pointDelta: -1, createdAt: now }, { id: 802, departmentId: 4, pointDelta: -1, createdAt: now }],
+    ]);
+    state.db = fake.db;
+
+    const dashboard = await getDashboard(admin);
+
+    expect(dashboard.departmentAccountability).toEqual([expect.objectContaining({ departmentId: 4, score: 98, pointsLost: 2, dispatched: 2, completed: 1, pending: 1, awaitingReply: 0 })]);
   });
 
   it("lets a manager provision a staff profile with a hashed local account credential", async () => {

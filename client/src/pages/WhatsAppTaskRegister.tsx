@@ -1,0 +1,96 @@
+import React, { useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/lib/trpc";
+import { AlertTriangle, CheckCircle2, ClipboardCopy, MessageCircleMore, MinusCircle, Send, Trophy } from "lucide-react";
+import { toast } from "sonner";
+
+const managers = ["super_admin", "hospital_admin", "department_head", "supervisor"];
+
+function statusTone(status: string) {
+  if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (["pending", "no_reply"].includes(status)) return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function formatDue(value: Date | string) {
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+export default function WhatsAppTaskRegister() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const register = trpc.operations.whatsappTaskRegister.useQuery(undefined, { enabled: Boolean(user && managers.includes(user.role)) });
+  const [dispatchDialog, setDispatchDialog] = useState<any | null>(null);
+  const [dispatchMessage, setDispatchMessage] = useState("");
+  const [sentConfirmed, setSentConfirmed] = useState(false);
+  const [outcomeDialog, setOutcomeDialog] = useState<any | null>(null);
+  const [outcome, setOutcome] = useState<"completed" | "pending" | "no_reply">("completed");
+  const [outcomeNote, setOutcomeNote] = useState("");
+  const dispatch = trpc.operations.whatsappTaskDispatch.useMutation({
+    onSuccess: result => {
+      toast.success(result.alreadyDispatched ? "This WhatsApp task was already recorded as sent." : "Task distribution recorded as sent.");
+      setDispatchDialog(null);
+      setDispatchMessage("");
+      setSentConfirmed(false);
+      utils.operations.whatsappTaskRegister.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+    onError: error => toast.error(error.message || "The WhatsApp task could not be recorded."),
+  });
+  const recordOutcome = trpc.operations.whatsappTaskOutcome.useMutation({
+    onSuccess: result => {
+      toast.success(result.penaltyApplied ? "Outcome recorded; one department point was deducted." : "End-of-day response recorded.");
+      setOutcomeDialog(null);
+      setOutcomeNote("");
+      utils.operations.whatsappTaskRegister.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+    onError: error => toast.error(error.message || "The response could not be recorded."),
+  });
+
+  if (!user || !managers.includes(user.role)) return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><AlertTriangle className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Manager access required</h1><p className="mt-2 text-sm text-slate-500">Only operational managers can distribute department WhatsApp tasks and maintain the accountability scorecard.</p></CardContent></Card>;
+  if (register.isLoading || !register.data) return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-2xl bg-slate-100" />)}</div>;
+
+  const { summary, scorecards, tasks } = register.data;
+  const openDispatchMessage = (row: any) => {
+    setDispatchDialog(row);
+    setDispatchMessage(row.dispatch?.messageText ?? row.suggestedMessage);
+    setSentConfirmed(Boolean(row.dispatch));
+  };
+  const copyDispatchMessage = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard is unavailable.");
+      await navigator.clipboard.writeText(dispatchMessage);
+      toast.success("Message copied. Send it in the department WhatsApp group, then confirm below.");
+    } catch {
+      toast.error("Clipboard is unavailable. Manually select the message below, copy it, send it, then confirm.");
+    }
+  };
+  return <>
+    <section className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">Manager-led accountability</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">WhatsApp task register</h1><p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">Copy a department message, send it yourself in WhatsApp, and record the end-of-day reply here. This workspace does not connect to WhatsApp or send messages automatically.</p></div><div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950"><p className="font-semibold">Scoring rule</p><p className="mt-0.5 text-xs leading-relaxed text-teal-800">A pending or no-reply outcome deducts one point once from the department score.</p></div></section>
+
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={Send} label="Recorded as sent" value={summary.sent} hint="Awaiting department reply" tone="teal" /><Metric icon={CheckCircle2} label="Completed replies" value={summary.completed} hint="Confirmed at end of day" tone="emerald" /><Metric icon={AlertTriangle} label="Pending / no reply" value={summary.pending} hint="Point deduction applies once" tone="rose" /><Metric icon={MessageCircleMore} label="Still to distribute" value={summary.notSent} hint="Copy message and send manually" tone="sky" /></div>
+
+    <Card className="mt-6 border-slate-200 shadow-sm"><CardHeader><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-600" /><div><CardTitle className="text-base">Department accountability scorecard</CardTitle><CardDescription>Scores begin at 100 each month. This view is ready to review in departmental meetings.</CardDescription></div></div></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Department</TableHead><TableHead>Score</TableHead><TableHead>Points lost</TableHead><TableHead>Meeting status</TableHead></TableRow></TableHeader><TableBody>{scorecards.map(scorecard => <TableRow key={scorecard.departmentId}><TableCell className="font-medium text-slate-800">{scorecard.departmentName}</TableCell><TableCell><span className={scorecard.score < 95 ? "font-semibold text-rose-700" : "font-semibold text-emerald-700"}>{scorecard.score}/100</span></TableCell><TableCell>{scorecard.pointsLost ? <span className="inline-flex items-center gap-1 text-rose-700"><MinusCircle className="h-3.5 w-3.5" />{scorecard.pointsLost}</span> : <span className="text-slate-500">—</span>}</TableCell><TableCell><Badge variant="outline" className={scorecard.score < 95 ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}>{scorecard.score < 95 ? "Needs discussion" : "On track"}</Badge></TableCell></TableRow>)}{scorecards.length === 0 && <TableRow><TableCell colSpan={4} className="h-20 text-center text-sm text-slate-500">No active departments are available for scoring.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card>
+
+    <Card className="mt-6 border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Today’s manual WhatsApp distribution</CardTitle><CardDescription>Prepare the message, send it yourself in the department group, confirm the send, then record the group’s end-of-day reply.</CardDescription></CardHeader><CardContent><p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 sm:hidden">Swipe left in the task table to reach the WhatsApp status and manager action controls.</p><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Task</TableHead><TableHead>Department</TableHead><TableHead>Due</TableHead><TableHead>WhatsApp status</TableHead><TableHead className="text-right">Manager action</TableHead></TableRow></TableHeader><TableBody>{tasks.map(row => <TableRow key={row.assignment.id}><TableCell className="min-w-60"><p className="font-medium text-slate-800">{row.task.name}</p><p className="mt-1 text-xs text-slate-500">{row.task.category}</p></TableCell><TableCell className="text-slate-600">{row.department.name}</TableCell><TableCell className="whitespace-nowrap text-slate-600">{formatDue(row.assignment.dueAt)}</TableCell><TableCell>{row.dispatch ? <Badge variant="outline" className={statusTone(row.dispatch.status)}>{row.dispatch.status.replaceAll("_", " ")}</Badge> : <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">Not sent</Badge>}</TableCell><TableCell className="min-w-64 text-right">{!row.dispatch ? <Button size="sm" disabled={dispatch.isPending} className="bg-teal-700 hover:bg-teal-800" onClick={() => openDispatchMessage(row)}><ClipboardCopy className="mr-1.5 h-3.5 w-3.5" />Prepare WhatsApp message</Button> : row.dispatch.status === "sent" ? <div className="flex justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => openDispatchMessage(row)}>View message</Button><Button size="sm" variant="outline" onClick={() => { setOutcomeDialog(row); setOutcome("completed"); setOutcomeNote(""); }}>Record EOD reply</Button></div> : <Button size="sm" variant="ghost" onClick={() => openDispatchMessage(row)}>View message</Button>}</TableCell></TableRow>)}{tasks.length === 0 && <TableRow><TableCell colSpan={5} className="h-28 text-center text-sm text-slate-500">There are no task assignments due today.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card>
+
+    <Dialog open={Boolean(dispatchDialog)} onOpenChange={open => !open && setDispatchDialog(null)}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Prepare department WhatsApp message</DialogTitle><DialogDescription>{dispatchDialog ? `${dispatchDialog.department.name} · ${dispatchDialog.task.name}` : "Copy the task message before sending it manually."}</DialogDescription></DialogHeader><div className="grid gap-4 pt-2"><div><Label htmlFor="whatsappMessagePreview">Message to send</Label><Textarea id="whatsappMessagePreview" className="mt-2 min-h-64 font-mono text-xs leading-relaxed" value={dispatchMessage} onChange={event => setDispatchMessage(event.target.value)} readOnly={Boolean(dispatchDialog?.dispatch)} /><p className="mt-2 text-xs leading-relaxed text-slate-500">The task is not recorded as sent until you personally confirm that it has been sent in the department WhatsApp group.</p></div><Button type="button" variant="outline" onClick={copyDispatchMessage}><ClipboardCopy className="mr-2 h-4 w-4" />Copy message</Button>{!dispatchDialog?.dispatch && <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700"><Checkbox checked={sentConfirmed} onCheckedChange={checked => setSentConfirmed(checked === true)} className="mt-0.5" /><span>I have sent this message to the department WhatsApp group.</span></label>}{!dispatchDialog?.dispatch && <Button disabled={!sentConfirmed || dispatch.isPending} onClick={() => dispatch.mutate({ assignmentId: dispatchDialog.assignment.id, messageText: dispatchMessage })} className="bg-teal-700 hover:bg-teal-800">{dispatch.isPending ? "Recording…" : "Record as sent"}</Button>}</div></DialogContent></Dialog>
+
+    <Dialog open={Boolean(outcomeDialog)} onOpenChange={open => !open && setOutcomeDialog(null)}><DialogContent><DialogHeader><DialogTitle>Record end-of-day WhatsApp reply</DialogTitle><DialogDescription>{outcomeDialog ? `${outcomeDialog.task.name} · ${outcomeDialog.department.name}` : "Record the department outcome."}</DialogDescription></DialogHeader><div className="grid gap-4 pt-2"><div><Label>Outcome</Label><Select value={outcome} onValueChange={value => setOutcome(value as typeof outcome)}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="completed">Completed</SelectItem><SelectItem value="pending">Pending — deduct one point</SelectItem><SelectItem value="no_reply">No reply — deduct one point</SelectItem></SelectContent></Select></div><div><Label htmlFor="whatsappOutcomeNote">Reply or manager note</Label><Textarea id="whatsappOutcomeNote" className="mt-2" value={outcomeNote} onChange={event => setOutcomeNote(event.target.value)} placeholder="Record the department’s WhatsApp response or reason for pending work." /></div>{["pending", "no_reply"].includes(outcome) && <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-relaxed text-rose-800">Recording this outcome will apply one point deduction to the department exactly once. It will remain visible on the accountability scorecard.</p>}<Button disabled={recordOutcome.isPending} onClick={() => outcomeDialog && recordOutcome.mutate({ dispatchId: outcomeDialog.dispatch.id, outcome, note: outcomeNote || undefined })} className="bg-teal-700 hover:bg-teal-800">{recordOutcome.isPending ? "Saving…" : "Save end-of-day outcome"}</Button></div></DialogContent></Dialog>
+  </>;
+}
+
+function Metric({ icon: Icon, label, value, hint, tone }: { icon: typeof Send; label: string; value: number; hint: string; tone: "teal" | "emerald" | "rose" | "sky" }) {
+  const colors = { teal: "bg-teal-50 text-teal-700", emerald: "bg-emerald-50 text-emerald-700", rose: "bg-rose-50 text-rose-700", sky: "bg-sky-50 text-sky-700" };
+  return <Card className="border-slate-200 shadow-sm"><CardContent className="p-4"><div className="flex items-start justify-between"><div><p className="text-sm font-medium text-slate-500">{label}</p><p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-500">{hint}</p></div><div className={`rounded-xl p-2.5 ${colors[tone]}`}><Icon className="h-5 w-5" /></div></div></CardContent></Card>;
+}

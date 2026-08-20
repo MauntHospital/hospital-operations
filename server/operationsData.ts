@@ -24,6 +24,8 @@ import {
   taskCompletions,
   tasks,
   users,
+  whatsappTaskDispatches,
+  departmentPointEvents,
   type User,
 } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -217,7 +219,7 @@ export async function ensureOperationalDemo(actor: User) {
 export async function getDashboard(user: User) {
   await ensureOperationalDemo(user);
   const db = await requireDb();
-  const [assignmentRows, issueRows, equipmentRows, inventoryRows, expiryRows, departmentRows, notificationRows] = await Promise.all([
+  const [assignmentRows, issueRows, equipmentRows, inventoryRows, expiryRows, departmentRows, notificationRows, dispatchRows, pointRows] = await Promise.all([
     db.select({ id: taskAssignments.id, status: taskAssignments.status, dueAt: taskAssignments.dueAt, taskName: tasks.name, priority: tasks.priority, departmentId: departments.id, departmentName: departments.name, assignedUserId: taskAssignments.assignedUserId }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)),
     db.select().from(issues).orderBy(desc(issues.updatedAt)),
     db.select().from(equipment),
@@ -225,6 +227,8 @@ export async function getDashboard(user: User) {
     db.select().from(expiryItems),
     db.select().from(departments).where(eq(departments.active, true)),
     db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(6),
+    db.select().from(whatsappTaskDispatches),
+    db.select().from(departmentPointEvents),
   ]);
   const now = new Date();
   const statusCounts = assignmentRows.reduce<Record<string, number>>((total, assignment) => {
@@ -244,12 +248,29 @@ export async function getDashboard(user: User) {
     total[key] = (total[key] ?? 0) + 1;
     return total;
   }, {});
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const departmentAccountability = departmentRows.map(department => {
+    const departmentDispatches = dispatchRows.filter(row => row.departmentId === department.id);
+    const monthPointEvents = pointRows.filter(row => row.departmentId === department.id && new Date(row.createdAt) >= monthStart);
+    const pointDelta = monthPointEvents.reduce((total, event) => total + event.pointDelta, 0);
+    return {
+      departmentId: department.id,
+      departmentName: department.name,
+      score: Math.max(0, 100 + pointDelta),
+      pointsLost: Math.abs(pointDelta),
+      dispatched: departmentDispatches.length,
+      completed: departmentDispatches.filter(row => row.status === "completed").length,
+      pending: departmentDispatches.filter(row => ["pending", "no_reply"].includes(row.status)).length,
+      awaitingReply: departmentDispatches.filter(row => row.status === "sent").length,
+    };
+  }).sort((a, b) => a.score - b.score || b.pending - a.pending);
   return {
     taskCounts: { total: assignmentRows.length, completed: statusCounts.completed ?? 0, pending: (statusCounts.not_started ?? 0) + (statusCounts.in_progress ?? 0) + (statusCounts.pending_approval ?? 0), overdue: statusCounts.overdue ?? 0 },
     issueCounts: { critical: issueRows.filter(issue => issue.priority === "critical" && !["resolved", "closed"].includes(issue.status)).length, high: issueRows.filter(issue => issue.priority === "high" && !["resolved", "closed"].includes(issue.status)).length, open: issueRows.filter(issue => !["resolved", "closed"].includes(issue.status)).length },
     equipmentCounts: { total: equipmentRows.length, working: equipmentRows.filter(row => row.status === "working").length, attention: equipmentRows.filter(row => row.status !== "working").length },
     inventoryCounts: { shortages: inventoryRows.filter(item => item.quantity <= item.reorderLevel).length, expiringSoon: (expiryCounts.within_30_days ?? 0) + (expiryCounts.within_60_days ?? 0), expired: expiryCounts.expired ?? 0 },
     departmentHealth,
+    departmentAccountability,
     notifications: notificationRows,
     recentAssignments: assignmentRows.slice(0, 6).map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.status, row.dueAt, now) })),
   };
@@ -263,6 +284,63 @@ export async function getMyDay(user: User) {
   const now = new Date();
   const active = rows.map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.assignment.status, row.assignment.dueAt, now) })).filter(row => isMyDayAssignmentVisible({ frequency: row.task.frequency, priority: row.task.priority, status: row.assignment.status, dueAt: row.assignment.dueAt }, now));
   return { tasks: active, counts: { total: active.length, overdue: active.filter(row => row.effectiveStatus === "overdue").length, completed: active.filter(row => row.effectiveStatus === "completed").length, pending: active.filter(row => !["completed", "overdue"].includes(row.effectiveStatus)).length } };
+}
+
+type WhatsAppDispatchOutcome = "completed" | "pending" | "no_reply";
+
+function whatsappTaskMessage(input: { taskName: string; departmentName: string; dueAt: Date }) {
+  const due = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(input.dueAt));
+  return `*${input.departmentName} — Daily task*\n\nTask: ${input.taskName}\nDue: ${due}\n\nPlease complete this task and reply in this department WhatsApp group by the end of the day with:\n• Completed — brief confirmation\n• Pending — reason and expected completion time\n\nUnresolved or no-reply tasks remain pending for the department and are recorded in the department accountability scorecard.`;
+}
+
+export async function getWhatsAppTaskRegister(user: User) {
+  ensureManager(user);
+  await ensureOperationalDemo(user);
+  const db = await requireDb();
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  const rows = await db.select({ assignment: taskAssignments, task: tasks, department: departments, dispatch: whatsappTaskDispatches }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)).where(and(gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)), lt(taskAssignments.dueAt, dayEnd))).orderBy(asc(taskAssignments.dueAt));
+  const pointRows = await db.select().from(departmentPointEvents);
+  const departmentRows = await db.select().from(departments).where(eq(departments.active, true));
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const scorecards = departmentRows.map(department => {
+    const events = pointRows.filter(event => event.departmentId === department.id && new Date(event.createdAt) >= monthStart);
+    const pointsLost = events.reduce((total, event) => total + Math.abs(event.pointDelta), 0);
+    return { departmentId: department.id, departmentName: department.name, score: Math.max(0, 100 - pointsLost), pointsLost };
+  }).sort((a, b) => a.score - b.score);
+  return {
+    tasks: rows.map(row => ({ ...row, suggestedMessage: whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt }) })),
+    scorecards,
+    summary: { sent: rows.filter(row => row.dispatch?.status === "sent").length, completed: rows.filter(row => row.dispatch?.status === "completed").length, pending: rows.filter(row => ["pending", "no_reply"].includes(row.dispatch?.status ?? "")).length, notSent: rows.filter(row => !row.dispatch).length },
+  };
+}
+
+export async function dispatchWhatsAppTask(user: User, input: { assignmentId: number; messageText?: string }) {
+  ensureManager(user);
+  await ensureOperationalDemo(user);
+  const db = await requireDb();
+  const row = (await db.select({ assignment: taskAssignments, task: tasks, department: departments }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).where(eq(taskAssignments.id, input.assignmentId)).limit(1))[0];
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Task assignment not found." });
+  const existing = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
+  const messageText = input.messageText?.trim() || whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt });
+  if (existing) return { dispatchId: existing.id, messageText: existing.messageText, alreadyDispatched: true };
+  const created = await db.insert(whatsappTaskDispatches).values({ assignmentId: row.assignment.id, taskId: row.task.id, departmentId: row.department.id, sentByUserId: user.id, messageText }).$returningId();
+  await writeAudit(user.id, "whatsapp_task_dispatched", "task_assignment", row.assignment.id, { dispatchId: created[0]!.id, departmentId: row.department.id });
+  return { dispatchId: created[0]!.id, messageText, alreadyDispatched: false };
+}
+
+export async function recordWhatsAppTaskOutcome(user: User, input: { dispatchId: number; outcome: WhatsAppDispatchOutcome; note?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
+  if (!dispatch) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
+  const shouldPenaltyApply = ["pending", "no_reply"].includes(input.outcome) && !dispatch.penaltyApplied;
+  await db.update(whatsappTaskDispatches).set({ status: input.outcome, respondedAt: new Date(), responseNote: input.note?.trim() || null, penaltyApplied: dispatch.penaltyApplied || shouldPenaltyApply }).where(eq(whatsappTaskDispatches.id, dispatch.id));
+  if (shouldPenaltyApply) await db.insert(departmentPointEvents).values({ departmentId: dispatch.departmentId, dispatchId: dispatch.id, pointDelta: -1, reason: input.outcome === "no_reply" ? "No end-of-day response to WhatsApp task" : "Task remained pending at end of day", recordedByUserId: user.id });
+  await writeAudit(user.id, "whatsapp_task_outcome_recorded", "whatsapp_dispatch", dispatch.id, { outcome: input.outcome, penaltyApplied: shouldPenaltyApply });
+  return { status: input.outcome, penaltyApplied: shouldPenaltyApply };
 }
 
 export async function getTaskDetail(user: User, assignmentId: number) {
