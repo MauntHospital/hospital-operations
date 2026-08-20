@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
+import { completeTask, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, isAdmin, isManager, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -66,6 +66,13 @@ const detail = {
 const requiredChecklist = { id: 12, taskId: 5, label: "Lead apron undamaged", required: true, active: true, position: 0 };
 
 describe("operational backend mutations", () => {
+  it("defines the intended Version 2 manager and administrator role matrix", () => {
+    expect([superAdmin, admin, departmentHead, supervisor].every(isManager)).toBe(true);
+    expect([actor, viewer].some(isManager)).toBe(false);
+    expect([superAdmin, admin].every(isAdmin)).toBe(true);
+    expect([departmentHead, supervisor, actor, viewer].some(isAdmin)).toBe(false);
+  });
+
   it("creates an issue, notification, audit entry, and checklist result for a damaging checklist finding", async () => {
     const fake = makeDb([
       [{ value: 1 }],
