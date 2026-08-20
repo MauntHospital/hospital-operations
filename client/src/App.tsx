@@ -17,6 +17,7 @@ import ScoringRules from "./pages/ScoringRules";
 import OperationalFollowUps from "./pages/OperationalFollowUps";
 import CommandSearch from "./pages/CommandSearch";
 import ReportsInsights from "./pages/ReportsInsights";
+import CalendarEvents from "./pages/CalendarEvents";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -39,7 +40,7 @@ function Router() {
       <Route path={"/roster"}><AppShell view="roster" /></Route>
       <Route path={"/handover"}><AppShell view="handover" /></Route>
       <Route path={"/reports"}><DashboardLayout><ReportsInsights /></DashboardLayout></Route>
-      <Route path={"/calendar"}><AppShell view="calendar" /></Route>
+      <Route path={"/calendar"}><DashboardLayout><CalendarEvents /></DashboardLayout></Route>
       <Route path={"/settings"}><DashboardLayout><ManagerSettings /></DashboardLayout></Route>
       <Route path={"/operations"}><AppShell view="overview" /></Route>
       <Route path={"/404"} component={NotFound} />
