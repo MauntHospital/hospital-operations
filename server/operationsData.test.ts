@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
+import { completeTask, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -53,6 +53,7 @@ const actor: User = {
 
 const admin: User = { ...actor, id: 1, openId: "admin-user", role: "hospital_admin" };
 const superAdmin: User = { ...actor, id: 2, openId: "super-admin-user", role: "super_admin" };
+const supervisor: User = { ...actor, id: 3, openId: "supervisor-user", role: "supervisor" };
 
 const detail = {
   assignment: { id: 77, taskId: 5, departmentId: 4, assignedUserId: 7, dueAt: new Date("2026-08-19T09:00:00.000Z"), status: "not_started" },
@@ -306,6 +307,21 @@ describe("operational backend mutations", () => {
     await expect(getTaskScoringRules(actor)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(updateRisk(actor, { riskId: 1, status: "resolved" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(updateManagementAction(actor, { actionId: 1, status: "completed" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("permits manager roles to review the Version 2 risk register", async () => {
+    const fake = makeDb([[]]);
+    state.db = fake.db;
+    await expect(getRiskRegister(supervisor)).resolves.toEqual([]);
+  });
+
+  it("keeps a pre-Version-2 sent WhatsApp dispatch visible in the manager register", async () => {
+    const now = new Date();
+    const legacyDispatch = { id: 90, assignmentId: 77, status: "sent", sentAt: now, penaltyApplied: false };
+    const fake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ assignment: { id: 77, dueAt: now }, task: { id: 5, name: "Legacy daily safety check", frequency: "daily", priority: "medium" }, department: { id: 4, name: "Radiology" }, dispatch: legacyDispatch }], [], [], [{ id: 4, name: "Radiology", active: true }]]);
+    state.db = fake.db;
+    const register = await getWhatsAppTaskRegister(admin);
+    expect(register.tasks).toEqual([expect.objectContaining({ dispatch: expect.objectContaining({ id: 90, status: "sent" }) })]);
   });
 
   it("generates the next daily assignment and surfaces it in My Day instead of prior-day completed work", async () => {
