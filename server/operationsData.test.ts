@@ -59,6 +59,7 @@ const actor: User = {
 };
 
 const admin: User = { ...actor, id: 1, openId: "admin-user", role: "hospital_admin" };
+const superAdmin: User = { ...actor, id: 2, openId: "super-admin-user", role: "super_admin" };
 
 const detail = {
   assignment: { id: 77, taskId: 5, departmentId: 4, assignedUserId: 7, dueAt: new Date("2026-08-19T09:00:00.000Z"), status: "not_started" },
@@ -149,13 +150,13 @@ describe("operational backend mutations", () => {
     expect(day.tasks[0]).toMatchObject({ task: { name: "Portable oxygen check" }, departmentName: "Radiology" });
   });
 
-  it("persists the manager-selected Saturday or Sunday weekly schedule into the created task and assignment", async () => {
+  it("persists the super-admin-selected Saturday or Sunday weekly schedule into the created task and assignment", async () => {
     const fake = makeDb([]);
     state.db = fake.db;
     const base = { departmentId: 4, frequency: "weekly" as const, dueTime: "09:30", priority: "medium" as const, category: "Safety", checklist: [] };
 
-    await createTask(admin, { ...base, name: "Saturday generator check", weeklyDay: "saturday" });
-    await createTask(admin, { ...base, name: "Sunday attendance review", weeklyDay: "sunday" });
+    await createTask(superAdmin, { ...base, name: "Saturday generator check", weeklyDay: "saturday" });
+    await createTask(superAdmin, { ...base, name: "Sunday attendance review", weeklyDay: "sunday" });
 
     const saturdayTask = fake.writes.find(write => (write.payload as any)?.name === "Saturday generator check")?.payload as any;
     const sundayTask = fake.writes.find(write => (write.payload as any)?.name === "Sunday attendance review")?.payload as any;
@@ -164,5 +165,11 @@ describe("operational backend mutations", () => {
     expect(sundayTask.recurrenceRule).toBe("weekly:sunday");
     expect(assignments.some(dueAt => dueAt.getDay() === 6)).toBe(true);
     expect(assignments.some(dueAt => dueAt.getDay() === 0)).toBe(true);
+  });
+
+  it("denies hospital administrators from creating department task schedules reserved for the super administrator", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(createTask(admin, { name: "Daily safety check", departmentId: 4, frequency: "daily", dueTime: "08:00", priority: "medium", category: "Safety", checklist: [] })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

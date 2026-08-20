@@ -22,6 +22,7 @@ const navigation = [
   { icon: CalendarClock, label: "Calendar", path: "/calendar", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: FileBarChart, label: "Reports", path: "/reports", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: Settings2, label: "Operations setup", path: "/settings", roles: ["super_admin", "hospital_admin"] },
+  { icon: CalendarClock, label: "Task schedules", path: "/department-schedules", roles: ["super_admin"] },
   { icon: KeyRound, label: "Staff accounts", path: "/staff-accounts", roles: ["super_admin", "hospital_admin"] },
 ];
 

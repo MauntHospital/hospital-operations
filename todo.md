@@ -35,3 +35,7 @@
 - [x] Add a visible Saturday or Sunday selector when managers create weekly checks, using the existing weekly-day task field.
 - [x] Add coverage that verifies manager-created Saturday and Sunday weekly checks are scheduled to the selected weekend day.
 - [x] Add a service-level test proving a manager-created weekly task persists the selected Saturday or Sunday schedule in its assignment and recurrence data.
+- [x] Restrict department schedule creation and schedule administration to the super-admin role.
+- [x] Add a super-admin department schedule workspace for daily, weekly, and monthly task plans.
+- [x] Show department-specific recurring task schedules with task counts, owner, next run, and active status.
+- [x] Add permission and department-schedule validation tests plus responsive visual verification.

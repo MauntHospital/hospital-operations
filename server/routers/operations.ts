@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { assignIssue, completeTask, createEquipmentMaintenance, createExpiryItem, createHandover, createInventoryItem, createIssue, createTask, getCalendar, getDashboard, getIssueHistory, getMyDay, getOperationsModules, getReports, getSettings, getTaskDetail, listIssues, manageDepartment, manageStaff, resetStaffPassword, resolveIssue, saveChecklistResult, setDepartmentActive, setStaffActive, updateDepartment, updateDutyAttendance, updateEscalationRule, updateNotificationRule, updateStaff } from "../operationsData";
+import { assignIssue, completeTask, createEquipmentMaintenance, createExpiryItem, createHandover, createInventoryItem, createIssue, createTask, getCalendar, getDashboard, getDepartmentTaskSchedules, getIssueHistory, getMyDay, getOperationsModules, getReports, getSettings, getTaskDetail, listIssues, manageDepartment, manageStaff, resetStaffPassword, resolveIssue, saveChecklistResult, setDepartmentActive, setStaffActive, updateDepartment, updateDutyAttendance, updateEscalationRule, updateNotificationRule, updateStaff } from "../operationsData";
 
 const priority = z.enum(["critical", "high", "medium", "low"]);
 const frequency = z.enum(["one_time", "daily", "every_shift", "weekly", "monthly", "quarterly", "yearly", "custom"]);
@@ -8,6 +8,7 @@ const finding = z.enum(["available", "not_available", "damaged", "expired", "low
 
 export const operationsRouter = router({
   dashboard: protectedProcedure.query(({ ctx }) => getDashboard(ctx.user)),
+  departmentSchedules: protectedProcedure.query(({ ctx }) => getDepartmentTaskSchedules(ctx.user)),
   myDay: protectedProcedure.query(({ ctx }) => getMyDay(ctx.user)),
   modules: protectedProcedure.query(({ ctx }) => getOperationsModules(ctx.user)),
   reports: protectedProcedure.query(({ ctx }) => getReports(ctx.user)),

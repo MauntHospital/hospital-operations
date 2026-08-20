@@ -9,6 +9,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import StaffLogin from "./pages/StaffLogin";
 import StaffAccounts from "./pages/StaffAccounts";
+import DepartmentSchedules from "./pages/DepartmentSchedules";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -16,6 +17,7 @@ function Router() {
     <Switch>
       <Route path={"/login"} component={StaffLogin} />
       <Route path={"/staff-accounts"}><DashboardLayout><StaffAccounts /></DashboardLayout></Route>
+      <Route path={"/department-schedules"}><DashboardLayout><DepartmentSchedules /></DashboardLayout></Route>
       <Route path={"/"}><AppShell view="dashboard" /></Route>
       <Route path={"/my-day"}><AppShell view="my-day" /></Route>
       <Route path={"/tasks/:id"}><AppShell view="tasks" /></Route>

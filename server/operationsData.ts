@@ -75,6 +75,10 @@ export function ensureManager(user: User) {
   if (!isManager(user)) throw new TRPCError({ code: "FORBIDDEN", message: "This action requires supervisor or administrator access." });
 }
 
+export function ensureSuperAdmin(user: User) {
+  if (user.role !== "super_admin") throw new TRPCError({ code: "FORBIDDEN", message: "Only the super administrator can create or manage department task schedules." });
+}
+
 export async function writeAudit(actorUserId: number | null, action: string, entityType: string, entityId: number | null, newValue?: Record<string, unknown>) {
   const db = await requireDb();
   await db.insert(auditLogs).values({ actorUserId, action, entityType, entityId, newValue: newValue ?? null });
@@ -324,7 +328,7 @@ export async function completeTask(user: User, input: { assignmentId: number; no
 }
 
 export async function createTask(user: User, input: { name: string; description?: string; departmentId: number; assignedUserId?: number; frequency: "one_time" | "daily" | "every_shift" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"; dueTime: string; priority: "critical" | "high" | "medium" | "low"; category: string; instructions?: string; evidenceRequired?: boolean; photoRequired?: boolean; approvalRequired?: boolean; weeklyDay?: "saturday" | "sunday"; checklist: string[] }) {
-  ensureManager(user);
+  ensureSuperAdmin(user);
   const db = await requireDb();
   const { weeklyDay, ...taskInput } = input;
   const ids = await db.insert(tasks).values({ ...taskInput, assignedUserId: input.assignedUserId ?? null, description: input.description ?? null, instructions: input.instructions ?? null, recurrenceRule: input.frequency === "weekly" ? `weekly:${weeklyDay ?? "saturday"}` : null, evidenceRequired: input.evidenceRequired ?? false, photoRequired: input.photoRequired ?? false, approvalRequired: input.approvalRequired ?? false, createdBy: user.id }).$returningId();
@@ -335,6 +339,12 @@ export async function createTask(user: User, input: { name: string; description?
   if (input.frequency !== "one_time") await db.insert(recurringTasks).values({ taskId, nextRunAt: computeNextDueDate(input.frequency, dueAt) });
   await writeAudit(user.id, "task_created", "task", taskId, { assignmentId: assignment[0]!.id, frequency: input.frequency });
   return { taskId, assignmentId: assignment[0]!.id };
+}
+
+export async function getDepartmentTaskSchedules(user: User) {
+  ensureSuperAdmin(user);
+  const db = await requireDb();
+  return db.select({ task: tasks, departmentId: departments.id, departmentName: departments.name, ownerName: users.name, nextRunAt: recurringTasks.nextRunAt }).from(tasks).innerJoin(departments, eq(tasks.departmentId, departments.id)).leftJoin(users, eq(tasks.assignedUserId, users.id)).leftJoin(recurringTasks, eq(recurringTasks.taskId, tasks.id)).where(inArray(tasks.frequency, ["daily", "weekly", "monthly"])).orderBy(asc(departments.name), asc(tasks.frequency), asc(tasks.name));
 }
 
 export async function listIssues(user: User) {
