@@ -81,5 +81,5 @@
 - [x] Connect inventory, equipment, roster, handover, issues, risks, and management actions through manager-confirmed operational workflows.
 - [x] Build risk-register and management-action modules with role-aware access and audit records.
 - [x] Expand reports, response-time analytics, repeated-problem analysis, trends, search, notification center, and calendar filters.
-- [ ] Add comprehensive regression, permission, data-preservation, and responsive validation for the Version 2 workflow.
+- [x] Add comprehensive regression, permission, data-preservation, and responsive validation for the Version 2 workflow.
 - [x] Prepare the required Version 2 implementation summary after validation.

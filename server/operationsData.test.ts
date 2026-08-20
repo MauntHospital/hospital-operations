@@ -269,6 +269,55 @@ describe("operational backend mutations", () => {
     expect(report.responseTimeAnalytics).toMatchObject({ acknowledgedCount: 0, respondedCount: 0, averageAcknowledgementMinutes: null, averageResponseMinutes: null });
   });
 
+  it("reports the complete Version 2 accountability workflow with response times, risks, overdue actions, and repeated-problem trends", async () => {
+    const now = new Date("2026-08-22T12:00:00.000Z");
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }],
+      [
+        { id: 77, status: "completed", dueAt: new Date("2026-08-22T09:00:00.000Z"), taskName: "Lead apron safety check", priority: "high", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id },
+        { id: 78, status: "in_progress", dueAt: new Date("2026-08-22T16:00:00.000Z"), taskName: "Mobile X-ray readiness check", priority: "medium", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id },
+      ],
+      [
+        { id: 21, category: "Equipment", priority: "high", status: "open", departmentId: 4, title: "Lead apron damaged", dueAt: new Date("2026-08-22T14:00:00.000Z") },
+        { id: 22, category: "Equipment", priority: "critical", status: "in_progress", departmentId: 4, title: "X-ray maintenance review", dueAt: new Date("2026-08-22T14:00:00.000Z") },
+        { id: 23, category: "Staffing", priority: "medium", status: "resolved", departmentId: 4, title: "Coverage restored", dueAt: null },
+      ],
+      [], [], [], [{ id: 4, name: "Radiology", active: true }], [],
+      [
+        { id: 501, departmentId: 4, status: "completed", createdAt: now },
+        { id: 502, departmentId: 4, status: "no_reply", createdAt: now },
+        { id: 503, departmentId: 4, status: "sent", createdAt: now },
+      ],
+      [{ id: 801, departmentId: 4, pointDelta: -30, reason: "No WhatsApp reply", createdAt: now }],
+      [{ id: 91, departmentId: 4, severity: "high", status: "open" }],
+      [{ id: 61, departmentId: 4, priority: "high", status: "open", dueAt: new Date(Date.now() - 60 * 60_000), ownerUserId: null }],
+      [], [], [{ id: 71, departmentId: 4, shift: "Day", attendance: "present" }],
+      [{ id: 1, code: "overdue_actions", warningThreshold: 1, criticalThreshold: 2, active: true }],
+      [{ id: 4, name: "Radiology", active: true }],
+      [{ id: 71, attendance: "late" }],
+      [
+        { id: 21, category: "Equipment", priority: "high", status: "open" },
+        { id: 22, category: "Equipment", priority: "critical", status: "in_progress" },
+        { id: 23, category: "Staffing", priority: "medium", status: "resolved" },
+      ],
+      [{ departmentId: 4, departmentName: "Radiology", pointDelta: -30, reason: "No WhatsApp reply", createdAt: now }],
+      [
+        { sentAt: new Date("2026-08-22T08:00:00.000Z"), acknowledgedAt: new Date("2026-08-22T08:10:00.000Z"), respondedAt: new Date("2026-08-22T09:00:00.000Z") },
+        { sentAt: new Date("2026-08-22T08:00:00.000Z"), acknowledgedAt: new Date("2026-08-22T08:30:00.000Z"), respondedAt: null },
+      ],
+    ]);
+    state.db = fake.db;
+
+    const report = await getReports(admin);
+
+    expect(report.dashboard).toMatchObject({ operationalStatus: "attention_required", riskCounts: { high: 1, open: 1 }, managementActionCounts: { overdue: 1, open: 1 } });
+    expect(report.whatsappSummary).toEqual({ dispatched: 3, completed: 1, pendingOrNoReply: 2, pointsLost: 3 });
+    expect(report.complianceSummary).toEqual({ hospitalRate: 33, dispatched: 3, completed: 1 });
+    expect(report.responseTimeAnalytics).toEqual({ acknowledgedCount: 2, respondedCount: 1, averageAcknowledgementMinutes: 20, averageResponseMinutes: 60 });
+    expect(report.repeatedProblemTrends).toEqual([{ category: "Equipment", count: 2 }, { category: "Staffing", count: 1 }]);
+    expect(report.departmentPointTrends).toEqual([expect.objectContaining({ departmentName: "Radiology", currentScore: 97, events: [expect.objectContaining({ pointDelta: -30, scoreAfter: 97 })] })]);
+  });
+
   it("persists the super-admin-selected Saturday or Sunday weekly schedule into the created task and assignment", async () => {
     const fake = makeDb([]);
     state.db = fake.db;
@@ -357,6 +406,24 @@ describe("operational backend mutations", () => {
     state.db = fake.db;
     const register = await getWhatsAppTaskRegister(admin);
     expect(register.tasks).toEqual([expect.objectContaining({ dispatch: expect.objectContaining({ id: 90, status: "sent" }) })]);
+  });
+
+  it("keeps a pre-Version-2 task assignment visible in My Day after the command-center upgrade", async () => {
+    const dueAt = new Date(Date.now() + 3 * 60 * 60_000);
+    const legacyAssignment = {
+      assignment: { id: 41, taskId: 12, departmentId: 4, assignedUserId: actor.id, dueAt, status: "in_progress" },
+      task: { id: 12, name: "Legacy radiation room readiness check", frequency: "daily", priority: "high" },
+      departmentName: "Radiology",
+    };
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [{ userId: actor.id, departmentId: 4, active: true }], [legacyAssignment],
+    ]);
+    state.db = fake.db;
+
+    const myDay = await getMyDay(actor);
+
+    expect(myDay.counts).toEqual({ total: 1, overdue: 0, completed: 0, pending: 1 });
+    expect(myDay.tasks).toEqual([expect.objectContaining({ assignment: expect.objectContaining({ id: 41, status: "in_progress" }), task: expect.objectContaining({ name: "Legacy radiation room readiness check" }), effectiveStatus: "in_progress" })]);
   });
 
   it("generates the next daily assignment and surfaces it in My Day instead of prior-day completed work", async () => {
