@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   auditLogs,
@@ -308,7 +308,7 @@ export async function saveChecklistResult(user: User, input: { assignmentId: num
   } else {
     await db.insert(taskChecklistResults).values({ assignmentId: input.assignmentId, checklistId: input.checklistId, status: input.status, note: input.note ?? null, evidenceUrl: input.evidenceUrl ?? null, reportedBy: user.id, createdIssueId: issueId });
   }
-  await db.update(taskAssignments).set({ status: "in_progress" }).where(eq(taskAssignments.id, input.assignmentId));
+  await db.update(taskAssignments).set({ status: "in_progress" }).where(and(eq(taskAssignments.id, input.assignmentId), notInArray(taskAssignments.status, ["completed", "pending_approval"])));
   await writeAudit(user.id, "checklist_result_saved", "task_assignment", input.assignmentId, { checklistId: input.checklistId, status: input.status, issueId });
   return { issueId, createdIssue: Boolean(issueId && !existing?.createdIssueId) };
 }

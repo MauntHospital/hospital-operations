@@ -46,3 +46,6 @@
 - [x] Add completed-task and day-rollover grouping coverage plus responsive visual verification.
 - [x] Add an integration test that simulates daily recurring-task generation and verifies the next-day My Day queue replaces prior daily work while preserving only unresolved critical tasks.
 - [x] Extend rollover integration coverage with prior-day completed work and unresolved critical carry-over assertions alongside the newly generated daily assignment.
+- [x] Fix overdue assignments so completing the required checklist and submitting the task records a Completed status instead of leaving it Overdue.
+- [x] Add regression coverage for overdue task completion and verify the status refresh in My Day.
+- [x] Add an integration test proving an overdue assignment changes to Completed in the refreshed My Day result after valid task submission.

@@ -40,7 +40,7 @@ function makeDb(selectResults: any[][]) {
         return { $returningId: async () => [{ id: 501 }], onDuplicateKeyUpdate: async () => ({}) };
       },
     }),
-    update: () => ({ set: () => ({ where: async () => ({}) }) }),
+    update: (table: unknown) => ({ set: (payload: unknown) => ({ where: async () => { writes.push({ table, payload, kind: "update" }); return {}; } }) }),
     delete: () => ({ where: async () => ({}) }),
   };
   return { db, writes };
@@ -100,6 +100,37 @@ describe("operational backend mutations", () => {
     state.db = fake.db;
 
     await expect(completeTask(actor, { assignmentId: 77 })).rejects.toMatchObject({ message: expect.stringMatching(/required checklist items/i) });
+  });
+
+  it("changes an overdue assignment to completed after its required checklist is recorded and submitted", async () => {
+    const overdueDetail = { ...detail, assignment: { ...detail.assignment, status: "overdue", dueAt: new Date("2026-08-20T08:00:00.000Z") }, task: { ...detail.task, evidenceRequired: false, approvalRequired: false } };
+    const recordedResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [overdueDetail], [requiredChecklist], [recordedResult],
+    ]);
+    state.db = fake.db;
+
+    await expect(completeTask(actor, { assignmentId: 77, notes: "All checks completed." })).resolves.toEqual({ status: "completed" });
+    expect(fake.writes.some(write => write.kind === "update" && (write.payload as any)?.status === "completed" && (write.payload as any)?.completedAt instanceof Date)).toBe(true);
+  });
+
+  it("shows a completed status in refreshed My Day after submitting an overdue assignment", async () => {
+    const overdueDetail = { ...detail, assignment: { ...detail.assignment, status: "overdue", dueAt: new Date() }, task: { ...detail.task, evidenceRequired: false, approvalRequired: false, frequency: "daily", priority: "high" } };
+    const recordedResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };
+    const refreshedMyDayRow = { assignment: { ...overdueDetail.assignment, status: "completed", completedAt: new Date() }, task: overdueDetail.task, departmentName: "Radiology" };
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [overdueDetail], [requiredChecklist], [recordedResult],
+      [{ value: 1 }], [{ value: 1 }], [{ userId: actor.id, departmentId: 4, active: true }], [refreshedMyDayRow],
+    ]);
+    state.db = fake.db;
+
+    await completeTask(actor, { assignmentId: 77 });
+    const refreshed = await getMyDay(actor);
+
+    expect(refreshed.tasks).toHaveLength(1);
+    expect(refreshed.tasks[0]).toMatchObject({ assignment: { id: 77, status: "completed" }, effectiveStatus: "completed" });
+    expect(refreshed.counts.completed).toBe(1);
+    expect(refreshed.counts.overdue).toBe(0);
   });
 
   it("lets a manager provision a staff profile with a hashed local account credential", async () => {
