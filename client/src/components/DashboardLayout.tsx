@@ -19,6 +19,7 @@ const navigation = [
   { icon: Wrench, label: "Equipment", path: "/equipment", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: PackageSearch, label: "Inventory & expiry", path: "/inventory", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: AlertTriangle, label: "Follow-up queue", path: "/operational-follow-ups", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
+  { icon: PackageSearch, label: "Search", path: "/search", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: CalendarClock, label: "Roster", path: "/roster", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: CalendarClock, label: "Handover", path: "/handover", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff"] },
   { icon: CalendarClock, label: "Calendar", path: "/calendar", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
