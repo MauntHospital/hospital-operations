@@ -27,7 +27,7 @@ import {
   type User,
 } from "../drizzle/schema";
 import { getDb } from "./db";
-import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason, type FindingStatus } from "./operationsLogic";
+import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, isMyDayAssignmentVisible, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason, type FindingStatus } from "./operationsLogic";
 import { hashPassword, normalizeUsername, passwordPolicyError, verifyPassword } from "./localAuth";
 
 const adminRoles = ["super_admin", "hospital_admin"] as const;
@@ -261,7 +261,7 @@ export async function getMyDay(user: User) {
   const profile = (await db.select().from(staffProfiles).where(eq(staffProfiles.userId, user.id)).limit(1))[0];
   const rows = await db.select({ assignment: taskAssignments, task: tasks, departmentName: departments.name }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).where(isAdmin(user) ? undefined : profile ? sql`(${taskAssignments.assignedUserId} = ${user.id} OR ${taskAssignments.departmentId} = ${profile.departmentId})` : eq(taskAssignments.assignedUserId, user.id)).orderBy(asc(taskAssignments.dueAt));
   const now = new Date();
-  const active = rows.map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.assignment.status, row.assignment.dueAt, now) }));
+  const active = rows.map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.assignment.status, row.assignment.dueAt, now) })).filter(row => isMyDayAssignmentVisible({ frequency: row.task.frequency, priority: row.task.priority, status: row.assignment.status, dueAt: row.assignment.dueAt }, now));
   return { tasks: active, counts: { total: active.length, overdue: active.filter(row => row.effectiveStatus === "overdue").length, completed: active.filter(row => row.effectiveStatus === "completed").length, pending: active.filter(row => !["completed", "overdue"].includes(row.effectiveStatus)).length } };
 }
 

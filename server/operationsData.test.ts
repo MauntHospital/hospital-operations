@@ -14,7 +14,7 @@ vi.mock("./localAuth", () => ({
   verifyPassword: async (value: string) => value === "AValidPassword2026",
 }));
 
-import { authenticateStaffAccount, completeTask, createTask, getMyDay, manageStaff, resetStaffPassword, saveChecklistResult } from "./operationsData";
+import { authenticateStaffAccount, completeTask, createTask, getMyDay, manageStaff, resetStaffPassword, runOperationalCycle, saveChecklistResult } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -171,5 +171,35 @@ describe("operational backend mutations", () => {
     const fake = makeDb([]);
     state.db = fake.db;
     await expect(createTask(admin, { name: "Daily safety check", departmentId: 4, frequency: "daily", dueTime: "08:00", priority: "medium", category: "Safety", checklist: [] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("generates the next daily assignment and surfaces it in My Day instead of prior-day completed work", async () => {
+    const now = new Date("2026-08-21T08:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const recurringTask = { recurring: { id: 31, taskId: 6, lastGeneratedFor: "2026-08-20", active: true }, task: { id: 6, departmentId: 4, assignedUserId: actor.id, dueTime: "09:00", frequency: "daily", active: true } };
+      const generatedAssignment = { assignment: { id: 501, taskId: 6, departmentId: 4, assignedUserId: actor.id, dueAt: new Date("2026-08-21T09:00:00.000Z"), status: "not_started" }, task: { id: 6, name: "Portable oxygen check", priority: "high", frequency: "daily" }, departmentName: "Radiology" };
+      const priorCompleted = { assignment: { id: 401, taskId: 7, departmentId: 4, assignedUserId: actor.id, dueAt: new Date("2026-08-20T09:00:00.000Z"), status: "completed" }, task: { id: 7, name: "Prior daily stock check", priority: "medium", frequency: "daily" }, departmentName: "Radiology" };
+      const criticalCarryOver = { assignment: { id: 402, taskId: 8, departmentId: 4, assignedUserId: actor.id, dueAt: new Date("2026-08-20T08:00:00.000Z"), status: "overdue" }, task: { id: 8, name: "Emergency oxygen escalation", priority: "critical", frequency: "daily" }, departmentName: "Radiology" };
+      const fake = makeDb([
+        [], [recurringTask], [], [],
+        [{ value: 1 }], [{ value: 1 }], [{ userId: actor.id, departmentId: 4, active: true }], [generatedAssignment, priorCompleted, criticalCarryOver],
+      ]);
+      state.db = fake.db;
+
+      const cycle = await runOperationalCycle();
+      const day = await getMyDay(actor);
+
+      expect(cycle.generatedAssignments).toBe(1);
+      expect(fake.writes.some(write => (write.payload as any)?.dueAt?.toISOString() === "2026-08-21T09:00:00.000Z")).toBe(true);
+      expect(day.tasks).toHaveLength(2);
+      expect(day.tasks.map(item => item.task.name)).toEqual(expect.arrayContaining(["Portable oxygen check", "Emergency oxygen escalation"]));
+      expect(day.tasks.map(item => item.task.name)).not.toContain("Prior daily stock check");
+      expect(day.tasks.find(item => item.task.name === "Portable oxygen check")?.assignment.dueAt.toISOString()).toBe("2026-08-21T09:00:00.000Z");
+      expect(day.tasks.find(item => item.task.name === "Emergency oxygen escalation")?.effectiveStatus).toBe("overdue");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

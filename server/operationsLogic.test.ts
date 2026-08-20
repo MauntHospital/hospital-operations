@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { User } from "../drizzle/schema";
 import { ensureManager, isAdmin, isManager } from "./operationsData";
-import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason } from "./operationsLogic";
+import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, isMyDayAssignmentVisible, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason } from "./operationsLogic";
 
 const baseUser: User = {
   id: 7,
@@ -53,6 +53,15 @@ describe("hospital operational workflow logic", () => {
     const wednesday = new Date("2026-08-19T08:00:00.000Z");
     expect(initialTaskDueDate("weekly", "09:30", "saturday", wednesday).toISOString()).toBe("2026-08-22T09:30:00.000Z");
     expect(initialTaskDueDate("weekly", "09:30", "sunday", wednesday).toISOString()).toBe("2026-08-23T09:30:00.000Z");
+  });
+
+  it("shows daily work only for the current operating day while retaining unresolved critical work", () => {
+    const now = new Date("2026-08-20T10:00:00.000Z");
+    expect(isMyDayAssignmentVisible({ frequency: "daily", priority: "medium", status: "not_started", dueAt: new Date("2026-08-19T09:00:00.000Z") }, now)).toBe(false);
+    expect(isMyDayAssignmentVisible({ frequency: "daily", priority: "medium", status: "not_started", dueAt: new Date("2026-08-20T11:00:00.000Z") }, now)).toBe(true);
+    expect(isMyDayAssignmentVisible({ frequency: "daily", priority: "medium", status: "not_started", dueAt: new Date("2026-08-21T09:00:00.000Z") }, now)).toBe(false);
+    expect(isMyDayAssignmentVisible({ frequency: "daily", priority: "medium", status: "completed", dueAt: new Date("2026-08-19T09:00:00.000Z") }, now)).toBe(false);
+    expect(isMyDayAssignmentVisible({ frequency: "daily", priority: "critical", status: "overdue", dueAt: new Date("2026-08-19T09:00:00.000Z") }, now)).toBe(true);
   });
 
   it("allows operational managers while preventing staff from administrative workflow creation", () => {

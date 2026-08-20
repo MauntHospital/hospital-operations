@@ -28,6 +28,14 @@ export function operationalAssignmentStatus(status: TaskStatus, dueAt: Date, now
   return dueAt.getTime() < now.getTime() ? "overdue" : status;
 }
 
+export function isMyDayAssignmentVisible(input: { frequency: string; priority: string; status: TaskStatus; dueAt: Date }, now = new Date()) {
+  const status = operationalAssignmentStatus(input.status, input.dueAt, now);
+  const sameOperatingDay = input.dueAt.getFullYear() === now.getFullYear() && input.dueAt.getMonth() === now.getMonth() && input.dueAt.getDate() === now.getDate();
+  if (status === "completed") return sameOperatingDay;
+  if (sameOperatingDay) return true;
+  return input.priority === "critical";
+}
+
 export function expiryHealth(expiryDate: Date, now = new Date()) {
   const days = Math.ceil((expiryDate.getTime() - now.getTime()) / 86_400_000);
   if (days < 0) return "expired" as const;

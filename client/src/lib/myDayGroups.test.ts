@@ -12,8 +12,17 @@ describe("groupMyDayTasks", () => {
       task(4, "monthly", "low", "Monthly attendance checking"),
     ]);
 
-    expect(groups.map(group => [group.key, group.tasks.length])).toEqual([["emergency", 1], ["daily", 1], ["weekly", 1], ["monthly", 1]]);
+    expect(groups.map(group => [group.key, group.tasks.length])).toEqual([["emergency", 1], ["daily", 1], ["weekly", 1], ["monthly", 1], ["completed", 0]]);
     expect(groups.find(group => group.key === "weekly")?.description).toMatch(/Saturday or Sunday/);
     expect(groups.find(group => group.key === "monthly")?.description).toMatch(/Data collection/);
+  });
+
+  it("moves completed work out of active emergency and daily task cards", () => {
+    const completedEmergency = { ...task(5, "daily", "critical", "Emergency trolley check"), effectiveStatus: "completed" };
+    const groups = groupMyDayTasks([completedEmergency, task(6, "daily", "medium", "Daily room check")]);
+
+    expect(groups.find(group => group.key === "emergency")?.tasks).toHaveLength(0);
+    expect(groups.find(group => group.key === "daily")?.tasks).toHaveLength(1);
+    expect(groups.find(group => group.key === "completed")?.tasks).toEqual([completedEmergency]);
   });
 });

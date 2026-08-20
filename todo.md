@@ -41,3 +41,8 @@
 - [x] Add permission and department-schedule validation tests plus responsive visual verification.
 - [x] Make the Emergency and Daily My Day task-card lists independently scrollable with clear scroll affordances.
 - [x] Verify the scrollable My Day card behavior on desktop and mobile.
+- [x] Add a dedicated Completed tasks card and remove completed items from active Emergency and Daily task cards.
+- [x] Ensure My Day active cards reflect current-day daily assignments after the next daily task generation cycle.
+- [x] Add completed-task and day-rollover grouping coverage plus responsive visual verification.
+- [x] Add an integration test that simulates daily recurring-task generation and verifies the next-day My Day queue replaces prior daily work while preserving only unresolved critical tasks.
+- [x] Extend rollover integration coverage with prior-day completed work and unresolved critical carry-over assertions alongside the newly generated daily assignment.
