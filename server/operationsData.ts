@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   auditLogs,
@@ -892,13 +892,15 @@ export async function updateDutyAttendance(user: User, input: { rosterId: number
 export async function getCalendar(user: User) {
   await ensureOperationalDemo(user);
   const db = await requireDb();
-  const [assignmentRows, maintenanceRows, expiryRows, rosterRows] = await Promise.all([
+  const [assignmentRows, maintenanceRows, expiryRows, rosterRows, riskRows, actionRows] = await Promise.all([
     db.select({ id: taskAssignments.id, title: tasks.name, date: taskAssignments.dueAt, type: tasks.category, status: taskAssignments.status, departmentName: departments.name }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).orderBy(asc(taskAssignments.dueAt)),
     db.select({ id: equipmentMaintenance.id, title: equipment.name, date: equipmentMaintenance.scheduledAt, type: equipmentMaintenance.maintenanceType, status: equipmentMaintenance.status, departmentName: departments.name }).from(equipmentMaintenance).innerJoin(equipment, eq(equipmentMaintenance.equipmentId, equipment.id)).innerJoin(departments, eq(equipment.departmentId, departments.id)).orderBy(asc(equipmentMaintenance.scheduledAt)),
     db.select({ id: expiryItems.id, title: expiryItems.name, date: expiryItems.expiryDate, type: expiryItems.category, departmentName: departments.name }).from(expiryItems).innerJoin(departments, eq(expiryItems.departmentId, departments.id)).orderBy(asc(expiryItems.expiryDate)),
     db.select({ id: dutyRosters.id, title: users.name, date: dutyRosters.dutyDate, type: dutyRosters.shift, status: dutyRosters.attendance, departmentName: departments.name }).from(dutyRosters).innerJoin(users, eq(dutyRosters.userId, users.id)).innerJoin(departments, eq(dutyRosters.departmentId, departments.id)).orderBy(asc(dutyRosters.dutyDate)),
+    db.select({ id: risks.id, title: risks.description, date: risks.reviewDate, type: risks.severity, status: risks.status, departmentName: departments.name }).from(risks).innerJoin(departments, eq(risks.departmentId, departments.id)).where(isNotNull(risks.reviewDate)).orderBy(asc(risks.reviewDate)),
+    db.select({ id: managementActions.id, title: managementActions.title, date: managementActions.dueAt, type: managementActions.priority, status: managementActions.status, departmentName: departments.name }).from(managementActions).innerJoin(departments, eq(managementActions.departmentId, departments.id)).where(isNotNull(managementActions.dueAt)).orderBy(asc(managementActions.dueAt)),
   ]);
-  return { tasks: assignmentRows, maintenance: maintenanceRows, expiry: expiryRows, duties: rosterRows };
+  return { tasks: assignmentRows, maintenance: maintenanceRows, expiry: expiryRows, duties: rosterRows, risks: riskRows, managementActions: actionRows };
 }
 
 export async function getSettings(user: User) {

@@ -233,6 +233,8 @@ function OperationsCalendar() {
     ...calendar.data.maintenance.map(row => ({ ...row, group: "Maintenance", date: row.date })),
     ...calendar.data.expiry.map(row => ({ ...row, group: "Expiry", date: row.date, status: "warning" })),
     ...calendar.data.duties.map(row => ({ ...row, group: "Duty", date: row.date })),
+    ...calendar.data.risks.map(row => ({ ...row, group: "Risk review", date: row.date! })),
+    ...calendar.data.managementActions.map(row => ({ ...row, group: "Management action", date: row.date! })),
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   return <><PageHeading eyebrow="Hospital-wide schedule" title="Operations calendar" description="A unified view of scheduled tasks, maintenance, expiry dates, and duty coverage." /><Card className="border-slate-200 shadow-sm"><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Activity</TableHead><TableHead>Department</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{events.map((event, index) => <TableRow key={`${event.group}-${event.id}-${index}`}><TableCell className="text-slate-500">{formatDate(event.date, event.group !== "Expiry" && event.group !== "Duty")}</TableCell><TableCell><Badge variant="outline" className="border-slate-200 text-slate-600">{event.group}</Badge></TableCell><TableCell className="font-medium text-slate-800">{event.title}</TableCell><TableCell className="text-slate-500">{event.departmentName}</TableCell><TableCell>{event.status ? <StatusBadge status={event.status} /> : <StatusBadge status="scheduled" />}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card></>;
 }
