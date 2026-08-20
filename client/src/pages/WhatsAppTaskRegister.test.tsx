@@ -25,9 +25,9 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import WhatsAppTaskRegister from "./WhatsAppTaskRegister";
 
-const makeRow = (dispatch: any = null) => ({
+const makeRow = (dispatch: any = null, frequency = "daily") => ({
   assignment: { id: 77, dueAt: new Date("2026-08-20T09:00:00.000Z") },
-  task: { id: 5, name: "Lead apron safety check", category: "Safety" },
+  task: { id: 5, name: "Lead apron safety check", category: "Safety", frequency },
   department: { id: 4, name: "Radiology" },
   dispatch,
   suggestedMessage: "Radiology daily task: Lead apron safety check. Reply by end of day.",
@@ -62,7 +62,7 @@ describe("WhatsAppTaskRegister manager workflow", () => {
 
   it("requires a manager confirmation after reviewing the visible WhatsApp message before recording a task as sent", () => {
     act(() => root.render(<WhatsAppTaskRegister />));
-    const prepareButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Prepare WhatsApp message")) as HTMLButtonElement;
+    const prepareButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Prepare message")) as HTMLButtonElement;
     act(() => prepareButton.click());
 
     const preview = document.querySelector("#whatsappMessagePreview") as HTMLTextAreaElement;
@@ -89,5 +89,14 @@ describe("WhatsAppTaskRegister manager workflow", () => {
 
     expect(state.outcomeInputs).toEqual([{ dispatchId: 501, outcome: "completed", note: undefined }]);
     expect(state.invalidations).toEqual(expect.arrayContaining(["register", "dashboard"]));
+  });
+
+  it("labels daily, weekly, and monthly WhatsApp tasks by cadence", () => {
+    state.registerData = { ...makeRegisterData(), tasks: [makeRow(null, "daily"), { ...makeRow(null, "weekly"), assignment: { id: 78, dueAt: new Date("2026-08-20T10:00:00.000Z") } }, { ...makeRow(null, "monthly"), assignment: { id: 79, dueAt: new Date("2026-08-20T11:00:00.000Z") } }] };
+    act(() => root.render(<WhatsAppTaskRegister />));
+
+    expect(container.textContent).toContain("Daily");
+    expect(container.textContent).toContain("Weekly");
+    expect(container.textContent).toContain("Monthly");
   });
 });

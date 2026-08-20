@@ -2,27 +2,26 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import AppShell from "@/pages/AppShell";
+import { TaskCreate } from "@/pages/OperationsPage";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import StaffLogin from "./pages/StaffLogin";
-import StaffAccounts from "./pages/StaffAccounts";
 import DepartmentSchedules from "./pages/DepartmentSchedules";
+import ManagerSettings from "./pages/ManagerSettings";
 import WhatsAppTaskRegister from "./pages/WhatsAppTaskRegister";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/login"} component={StaffLogin} />
-      <Route path={"/staff-accounts"}><DashboardLayout><StaffAccounts /></DashboardLayout></Route>
+      <Route path={"/department-schedules/new"}><DashboardLayout><TaskCreate /></DashboardLayout></Route>
       <Route path={"/department-schedules"}><DashboardLayout><DepartmentSchedules /></DashboardLayout></Route>
       <Route path={"/whatsapp-tasks"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
       <Route path={"/"}><AppShell view="dashboard" /></Route>
-      <Route path={"/my-day"}><AppShell view="my-day" /></Route>
-      <Route path={"/tasks/:id"}><AppShell view="tasks" /></Route>
+      <Route path={"/my-day"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
+      <Route path={"/tasks/:id"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
       <Route path={"/issues"}><AppShell view="issues" /></Route>
       <Route path={"/equipment"}><AppShell view="equipment" /></Route>
       <Route path={"/inventory"}><AppShell view="inventory" /></Route>
@@ -30,7 +29,7 @@ function Router() {
       <Route path={"/handover"}><AppShell view="handover" /></Route>
       <Route path={"/reports"}><AppShell view="reports" /></Route>
       <Route path={"/calendar"}><AppShell view="calendar" /></Route>
-      <Route path={"/settings"}><AppShell view="settings" /></Route>
+      <Route path={"/settings"}><DashboardLayout><ManagerSettings /></DashboardLayout></Route>
       <Route path={"/operations"}><AppShell view="overview" /></Route>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

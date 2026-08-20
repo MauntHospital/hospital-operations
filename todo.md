@@ -59,3 +59,13 @@
 - [x] Add tests and responsive verification for manual dispatch, outcome recording, pending status, and point calculations.
 - [x] Add a visible WhatsApp message preview and safe manual-copy fallback before a dispatch is recorded as sent.
 - [x] Add component-level coverage for manager dispatch, end-of-day outcome recording, and scorecard refresh.
+- [x] Expand manual WhatsApp distribution to eligible daily, weekly, and monthly department task assignments.
+- [x] Remove evidence and photo requirements from task creation, completion logic, and task-execution screens.
+- [x] Retire staff account provisioning, staff-password sign-in, and staff-facing My Day workflow from the manager-only operating model.
+- [x] Refocus manager navigation, dashboard copy, reports, and tests around WhatsApp dispatch and department accountability.
+- [x] Safely migrate the remaining task data and validate the consolidated manager-only workflow.
+- [x] Remove exposed staff-account provisioning, reset, activation, and update procedures while preserving historical operational records.
+- [x] Add WhatsApp dispatch outcomes, pending/no-reply counts, and department point trends to the manager reports experience.
+- [x] Add regression and responsive coverage for the fully consolidated manager-only workflow.
+- [x] Add current-month department point-trend history to manager reports with regression coverage.
+- [x] Verify the WhatsApp register, reports, and manager settings layouts on a mobile viewport.

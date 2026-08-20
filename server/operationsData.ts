@@ -30,7 +30,6 @@ import {
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { computeNextDueDate, expiryHealth, findingCreatesIssue, initialTaskDueDate, isMyDayAssignmentVisible, operationalAssignmentStatus, priorityForFinding, taskCompletionBlockReason, type FindingStatus } from "./operationsLogic";
-import { hashPassword, normalizeUsername, passwordPolicyError, verifyPassword } from "./localAuth";
 
 const adminRoles = ["super_admin", "hospital_admin"] as const;
 const managerRoles = ["super_admin", "hospital_admin", "department_head", "supervisor"] as const;
@@ -143,10 +142,10 @@ export async function ensureOperationalDemo(actor: User) {
 
   const taskRows = [
     { name: "X-ray machine operational check", departmentId: departmentId.RAD, assignedUserId: personId["demo-technician"], frequency: "daily" as const, dueTime: "09:00", priority: "high" as const, category: "Equipment", instructions: "Verify system readiness and record all safety findings before first imaging session.", evidenceRequired: false, photoRequired: false, approvalRequired: false, createdBy: actor.id },
-    { name: "Lead apron and radiation safety check", departmentId: departmentId.RAD, assignedUserId: personId["demo-technician"], frequency: "daily" as const, dueTime: "09:15", priority: "high" as const, category: "Safety", instructions: "Confirm protective equipment availability, condition, and correct location.", evidenceRequired: true, photoRequired: true, approvalRequired: false, createdBy: actor.id },
+    { name: "Lead apron and radiation safety check", departmentId: departmentId.RAD, assignedUserId: personId["demo-technician"], frequency: "daily" as const, dueTime: "09:15", priority: "high" as const, category: "Safety", instructions: "Confirm protective equipment availability, condition, and correct location.", evidenceRequired: false, photoRequired: false, approvalRequired: false, createdBy: actor.id },
     { name: "Essential medicine availability", departmentId: departmentId.PHA, assignedUserId: personId["demo-pharmacy-lead"], frequency: "daily" as const, dueTime: "09:30", priority: "critical" as const, category: "Inventory", instructions: "Review critical medication stock and near-expiry items for the emergency formulary.", evidenceRequired: false, photoRequired: false, approvalRequired: true, createdBy: actor.id },
-    { name: "Emergency trolley check", departmentId: departmentId.ED, assignedUserId: personId["demo-nurse"], frequency: "every_shift" as const, dueTime: "10:00", priority: "critical" as const, category: "Emergency readiness", instructions: "Inspect trolley, defibrillator, oxygen, suction, emergency medicines, and monitoring equipment.", evidenceRequired: true, photoRequired: true, approvalRequired: true, createdBy: actor.id },
-    { name: "Generator and medical gas system check", departmentId: departmentId.MNT, assignedUserId: personId["demo-maintenance"], frequency: "daily" as const, dueTime: "08:30", priority: "critical" as const, category: "Infrastructure", instructions: "Confirm generator transfer readiness and medical gas pressure indicators.", evidenceRequired: true, photoRequired: false, approvalRequired: false, createdBy: actor.id },
+    { name: "Emergency trolley check", departmentId: departmentId.ED, assignedUserId: personId["demo-nurse"], frequency: "every_shift" as const, dueTime: "10:00", priority: "critical" as const, category: "Emergency readiness", instructions: "Inspect trolley, defibrillator, oxygen, suction, emergency medicines, and monitoring equipment.", evidenceRequired: false, photoRequired: false, approvalRequired: true, createdBy: actor.id },
+    { name: "Generator and medical gas system check", departmentId: departmentId.MNT, assignedUserId: personId["demo-maintenance"], frequency: "daily" as const, dueTime: "08:30", priority: "critical" as const, category: "Infrastructure", instructions: "Confirm generator transfer readiness and medical gas pressure indicators.", evidenceRequired: false, photoRequired: false, approvalRequired: false, createdBy: actor.id },
     { name: "Emergency cleaning and waste inspection", departmentId: departmentId.HSK, assignedUserId: actor.id, frequency: "daily" as const, dueTime: "11:00", priority: "medium" as const, category: "Housekeeping", instructions: "Inspect environmental hygiene, sharps handling, and cleaning supplies.", evidenceRequired: false, photoRequired: false, approvalRequired: false, createdBy: actor.id },
   ];
   const insertedTasks = await db.insert(tasks).values(taskRows).$returningId();
@@ -288,9 +287,10 @@ export async function getMyDay(user: User) {
 
 type WhatsAppDispatchOutcome = "completed" | "pending" | "no_reply";
 
-function whatsappTaskMessage(input: { taskName: string; departmentName: string; dueAt: Date }) {
+function whatsappTaskMessage(input: { taskName: string; departmentName: string; dueAt: Date; frequency: string }) {
   const due = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(input.dueAt));
-  return `*${input.departmentName} — Daily task*\n\nTask: ${input.taskName}\nDue: ${due}\n\nPlease complete this task and reply in this department WhatsApp group by the end of the day with:\n• Completed — brief confirmation\n• Pending — reason and expected completion time\n\nUnresolved or no-reply tasks remain pending for the department and are recorded in the department accountability scorecard.`;
+  const cadence = input.frequency === "monthly" ? "Monthly task" : input.frequency === "weekly" ? "Weekly task" : "Daily task";
+  return `*${input.departmentName} — ${cadence}*\n\nTask: ${input.taskName}\nDue: ${due}\n\nPlease complete this task and reply in this department WhatsApp group by the end of the day with:\n• Completed — brief confirmation\n• Pending — reason and expected completion time\n\nUnresolved or no-reply tasks remain pending for the department and are recorded in the department accountability scorecard.`;
 }
 
 export async function getWhatsAppTaskRegister(user: User) {
@@ -301,7 +301,7 @@ export async function getWhatsAppTaskRegister(user: User) {
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
-  const rows = await db.select({ assignment: taskAssignments, task: tasks, department: departments, dispatch: whatsappTaskDispatches }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)).where(and(gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)), lt(taskAssignments.dueAt, dayEnd))).orderBy(asc(taskAssignments.dueAt));
+  const rows = await db.select({ assignment: taskAssignments, task: tasks, department: departments, dispatch: whatsappTaskDispatches }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)).where(and(gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)), lt(taskAssignments.dueAt, dayEnd), inArray(tasks.frequency, ["daily", "weekly", "monthly"]))).orderBy(asc(taskAssignments.dueAt));
   const pointRows = await db.select().from(departmentPointEvents);
   const departmentRows = await db.select().from(departments).where(eq(departments.active, true));
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -311,7 +311,7 @@ export async function getWhatsAppTaskRegister(user: User) {
     return { departmentId: department.id, departmentName: department.name, score: Math.max(0, 100 - pointsLost), pointsLost };
   }).sort((a, b) => a.score - b.score);
   return {
-    tasks: rows.map(row => ({ ...row, suggestedMessage: whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt }) })),
+    tasks: rows.map(row => ({ ...row, suggestedMessage: whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt, frequency: row.task.frequency }) })),
     scorecards,
     summary: { sent: rows.filter(row => row.dispatch?.status === "sent").length, completed: rows.filter(row => row.dispatch?.status === "completed").length, pending: rows.filter(row => ["pending", "no_reply"].includes(row.dispatch?.status ?? "")).length, notSent: rows.filter(row => !row.dispatch).length },
   };
@@ -324,7 +324,7 @@ export async function dispatchWhatsAppTask(user: User, input: { assignmentId: nu
   const row = (await db.select({ assignment: taskAssignments, task: tasks, department: departments }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).where(eq(taskAssignments.id, input.assignmentId)).limit(1))[0];
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Task assignment not found." });
   const existing = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
-  const messageText = input.messageText?.trim() || whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt });
+  const messageText = input.messageText?.trim() || whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt, frequency: row.task.frequency });
   if (existing) return { dispatchId: existing.id, messageText: existing.messageText, alreadyDispatched: true };
   const created = await db.insert(whatsappTaskDispatches).values({ assignmentId: row.assignment.id, taskId: row.task.id, departmentId: row.department.id, sentByUserId: user.id, messageText }).$returningId();
   await writeAudit(user.id, "whatsapp_task_dispatched", "task_assignment", row.assignment.id, { dispatchId: created[0]!.id, departmentId: row.department.id });
@@ -357,7 +357,7 @@ export async function getTaskDetail(user: User, assignmentId: number) {
   return { ...row, effectiveStatus: operationalAssignmentStatus(row.assignment.status, row.assignment.dueAt), checklist: checklist.map(item => ({ ...item, result: byChecklist.get(item.id) ?? null })) };
 }
 
-export async function saveChecklistResult(user: User, input: { assignmentId: number; checklistId: number; status: FindingStatus; note?: string; evidenceUrl?: string }) {
+export async function saveChecklistResult(user: User, input: { assignmentId: number; checklistId: number; status: FindingStatus; note?: string }) {
   const db = await requireDb();
   const detail = await getTaskDetail(user, input.assignmentId);
   const checklist = detail.checklist.find(item => item.id === input.checklistId);
@@ -382,34 +382,34 @@ export async function saveChecklistResult(user: User, input: { assignmentId: num
     await writeAudit(user.id, "issue_created_from_checklist", "issue", issueId, { status: input.status, assignmentId: input.assignmentId });
   }
   if (existing) {
-    await db.update(taskChecklistResults).set({ status: input.status, note: input.note ?? null, evidenceUrl: input.evidenceUrl ?? null, reportedBy: user.id, createdIssueId: issueId }).where(eq(taskChecklistResults.id, existing.id));
+    await db.update(taskChecklistResults).set({ status: input.status, note: input.note ?? null, evidenceUrl: null, reportedBy: user.id, createdIssueId: issueId }).where(eq(taskChecklistResults.id, existing.id));
   } else {
-    await db.insert(taskChecklistResults).values({ assignmentId: input.assignmentId, checklistId: input.checklistId, status: input.status, note: input.note ?? null, evidenceUrl: input.evidenceUrl ?? null, reportedBy: user.id, createdIssueId: issueId });
+    await db.insert(taskChecklistResults).values({ assignmentId: input.assignmentId, checklistId: input.checklistId, status: input.status, note: input.note ?? null, evidenceUrl: null, reportedBy: user.id, createdIssueId: issueId });
   }
   await db.update(taskAssignments).set({ status: "in_progress" }).where(and(eq(taskAssignments.id, input.assignmentId), notInArray(taskAssignments.status, ["completed", "pending_approval"])));
   await writeAudit(user.id, "checklist_result_saved", "task_assignment", input.assignmentId, { checklistId: input.checklistId, status: input.status, issueId });
   return { issueId, createdIssue: Boolean(issueId && !existing?.createdIssueId) };
 }
 
-export async function completeTask(user: User, input: { assignmentId: number; notes?: string; evidenceUrl?: string }) {
+export async function completeTask(user: User, input: { assignmentId: number; notes?: string }) {
   const db = await requireDb();
   const detail = await getTaskDetail(user, input.assignmentId);
   const requiredChecklist = detail.checklist.filter(item => item.required);
-  const completionBlock = taskCompletionBlockReason({ requiredChecklistCount: requiredChecklist.length, completedChecklistCount: requiredChecklist.filter(item => item.result).length, evidenceRequired: detail.task.evidenceRequired, photoRequired: detail.task.photoRequired, evidenceUrl: input.evidenceUrl });
+  const completionBlock = taskCompletionBlockReason({ requiredChecklistCount: requiredChecklist.length, completedChecklistCount: requiredChecklist.filter(item => item.result).length });
   if (completionBlock) throw new TRPCError({ code: "BAD_REQUEST", message: completionBlock });
   const needsApproval = detail.task.approvalRequired;
   const finalStatus = needsApproval ? "pending_approval" : "completed" as const;
   await db.update(taskAssignments).set({ status: finalStatus, completedAt: new Date() }).where(eq(taskAssignments.id, input.assignmentId));
-  await db.insert(taskCompletions).values({ assignmentId: input.assignmentId, taskId: detail.task.id, userId: user.id, departmentId: detail.department.id, status: finalStatus, notes: input.notes ?? null, evidenceUrl: input.evidenceUrl ?? null, approvalStatus: needsApproval ? "pending" : "not_required" }).onDuplicateKeyUpdate({ set: { status: finalStatus, notes: input.notes ?? null, evidenceUrl: input.evidenceUrl ?? null, completedAt: new Date() } });
+  await db.insert(taskCompletions).values({ assignmentId: input.assignmentId, taskId: detail.task.id, userId: user.id, departmentId: detail.department.id, status: finalStatus, notes: input.notes ?? null, evidenceUrl: null, approvalStatus: needsApproval ? "pending" : "not_required" }).onDuplicateKeyUpdate({ set: { status: finalStatus, notes: input.notes ?? null, evidenceUrl: null, completedAt: new Date() } });
   await writeAudit(user.id, "task_submitted", "task_assignment", input.assignmentId, { status: finalStatus });
   return { status: finalStatus };
 }
 
-export async function createTask(user: User, input: { name: string; description?: string; departmentId: number; assignedUserId?: number; frequency: "one_time" | "daily" | "every_shift" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"; dueTime: string; priority: "critical" | "high" | "medium" | "low"; category: string; instructions?: string; evidenceRequired?: boolean; photoRequired?: boolean; approvalRequired?: boolean; weeklyDay?: "saturday" | "sunday"; checklist: string[] }) {
+export async function createTask(user: User, input: { name: string; description?: string; departmentId: number; assignedUserId?: number; frequency: "one_time" | "daily" | "every_shift" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"; dueTime: string; priority: "critical" | "high" | "medium" | "low"; category: string; instructions?: string; approvalRequired?: boolean; weeklyDay?: "saturday" | "sunday"; checklist: string[] }) {
   ensureSuperAdmin(user);
   const db = await requireDb();
   const { weeklyDay, ...taskInput } = input;
-  const ids = await db.insert(tasks).values({ ...taskInput, assignedUserId: input.assignedUserId ?? null, description: input.description ?? null, instructions: input.instructions ?? null, recurrenceRule: input.frequency === "weekly" ? `weekly:${weeklyDay ?? "saturday"}` : null, evidenceRequired: input.evidenceRequired ?? false, photoRequired: input.photoRequired ?? false, approvalRequired: input.approvalRequired ?? false, createdBy: user.id }).$returningId();
+  const ids = await db.insert(tasks).values({ ...taskInput, assignedUserId: input.assignedUserId ?? null, description: input.description ?? null, instructions: input.instructions ?? null, recurrenceRule: input.frequency === "weekly" ? `weekly:${weeklyDay ?? "saturday"}` : null, evidenceRequired: false, photoRequired: false, approvalRequired: input.approvalRequired ?? false, createdBy: user.id }).$returningId();
   const taskId = ids[0]!.id;
   if (input.checklist.length) await db.insert(taskChecklists).values(input.checklist.filter(Boolean).map((label, position) => ({ taskId, label, position, required: true })));
   const dueAt = initialTaskDueDate(input.frequency, input.dueTime, weeklyDay ?? "saturday");
@@ -489,15 +489,36 @@ export async function getReports(user: User) {
   ensureManager(user);
   const dashboard = await getDashboard(user);
   const db = await requireDb();
-  const [departmentRows, rosterRows, issueRows] = await Promise.all([
+  const reportMonthStart = new Date();
+  reportMonthStart.setDate(1);
+  reportMonthStart.setHours(0, 0, 0, 0);
+  const [departmentRows, rosterRows, issueRows, pointEventRows] = await Promise.all([
     db.select().from(departments).where(eq(departments.active, true)),
     db.select().from(dutyRosters).where(eq(dutyRosters.dutyDate, new Date(dateKey()))),
     db.select().from(issues),
+    db.select({ departmentId: departmentPointEvents.departmentId, departmentName: departments.name, pointDelta: departmentPointEvents.pointDelta, reason: departmentPointEvents.reason, createdAt: departmentPointEvents.createdAt }).from(departmentPointEvents).innerJoin(departments, eq(departmentPointEvents.departmentId, departments.id)).where(gt(departmentPointEvents.createdAt, new Date(reportMonthStart.getTime() - 1))).orderBy(asc(departmentPointEvents.createdAt)),
   ]);
+  const eventsByDepartment = new Map<number, typeof pointEventRows>();
+  for (const event of pointEventRows) eventsByDepartment.set(event.departmentId, [...(eventsByDepartment.get(event.departmentId) ?? []), event]);
   return {
     generatedAt: new Date(),
     dashboard,
     departmentPerformance: dashboard.departmentHealth.map(department => ({ name: department.name, assigned: department.total, completed: department.completed, completionRate: department.total ? Math.round((department.completed / department.total) * 100) : 0, overdue: department.overdue, openIssues: department.activeIssues })),
+    whatsappAccountability: dashboard.departmentAccountability,
+    whatsappSummary: {
+      dispatched: dashboard.departmentAccountability.reduce((total, department) => total + department.dispatched, 0),
+      completed: dashboard.departmentAccountability.reduce((total, department) => total + department.completed, 0),
+      pendingOrNoReply: dashboard.departmentAccountability.reduce((total, department) => total + department.pending + department.awaitingReply, 0),
+      pointsLost: dashboard.departmentAccountability.reduce((total, department) => total + department.pointsLost, 0),
+    },
+    departmentPointTrends: dashboard.departmentAccountability.map(department => {
+      let runningScore = 100;
+      const events = (eventsByDepartment.get(department.departmentId) ?? []).map(event => {
+        runningScore += event.pointDelta;
+        return { ...event, scoreAfter: runningScore };
+      });
+      return { departmentId: department.departmentId, departmentName: department.departmentName, currentScore: department.score, events };
+    }),
     attendance: { scheduled: rosterRows.length, absent: rosterRows.filter(row => row.attendance === "absent" || row.attendance === "leave").length, late: rosterRows.filter(row => row.attendance === "late").length, replacements: rosterRows.filter(row => row.attendance === "replacement").length },
     issueSummary: { total: issueRows.length, open: issueRows.filter(row => !["resolved", "closed"].includes(row.status)).length, critical: issueRows.filter(row => row.priority === "critical" && !["resolved", "closed"].includes(row.status)).length },
     departmentCount: departmentRows.length,
@@ -510,71 +531,6 @@ export async function manageDepartment(user: User, input: { name: string; code: 
   const created = await db.insert(departments).values({ name: input.name, code: input.code.toUpperCase(), description: input.description ?? null }).$returningId();
   await writeAudit(user.id, "department_created", "department", created[0]!.id, input);
   return { id: created[0]!.id };
-}
-
-export async function manageStaff(user: User, input: { name: string; email?: string; departmentId: number; role: "hospital_admin" | "department_head" | "supervisor" | "staff" | "viewer"; title?: string; username?: string; temporaryPassword?: string }) {
-  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can add staff." });
-  const db = await requireDb();
-  const hasCredentials = Boolean(input.username || input.temporaryPassword);
-  if (hasCredentials && (!input.username || !input.temporaryPassword)) throw new TRPCError({ code: "BAD_REQUEST", message: "Provide both an account name and a temporary password." });
-  const username = input.username ? normalizeUsername(input.username) : null;
-  const passwordError = input.temporaryPassword ? passwordPolicyError(input.temporaryPassword) : null;
-  if (username && !/^[a-z0-9._-]{3,64}$/.test(username)) throw new TRPCError({ code: "BAD_REQUEST", message: "Account name must use 3–64 lower-case letters, numbers, dots, hyphens, or underscores." });
-  if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
-  const openId = `staff-${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
-  const created = await db.insert(users).values({ openId, name: input.name, email: input.email ?? null, loginMethod: "managed", role: input.role }).$returningId();
-  const userId = created[0]!.id;
-  await db.insert(staffProfiles).values({ userId, departmentId: input.departmentId, employeeCode: `EMP-${String(userId).padStart(4, "0")}`, title: input.title ?? null });
-  if (username && input.temporaryPassword) {
-    try {
-      await db.insert(staffCredentials).values({ userId, username, passwordHash: await hashPassword(input.temporaryPassword), mustChangePassword: true });
-    } catch (error) {
-      await db.delete(staffProfiles).where(eq(staffProfiles.userId, userId));
-      await db.delete(users).where(eq(users.id, userId));
-      throw new TRPCError({ code: "CONFLICT", message: "That account name is already in use." });
-    }
-  }
-  await writeAudit(user.id, "staff_added", "user", userId, { departmentId: input.departmentId, role: input.role, username });
-  return { id: userId, username };
-}
-
-export async function resetStaffPassword(user: User, input: { userId: number; temporaryPassword: string }) {
-  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can reset staff passwords." });
-  const passwordError = passwordPolicyError(input.temporaryPassword);
-  if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
-  const db = await requireDb();
-  const credential = (await db.select().from(staffCredentials).where(eq(staffCredentials.userId, input.userId)).limit(1))[0];
-  if (!credential) throw new TRPCError({ code: "NOT_FOUND", message: "This staff member does not have a local account." });
-  await db.update(staffCredentials).set({ passwordHash: await hashPassword(input.temporaryPassword), mustChangePassword: true, passwordChangedAt: new Date() }).where(eq(staffCredentials.userId, input.userId));
-  await writeAudit(user.id, "staff_password_reset", "user", input.userId, {});
-  return { success: true };
-}
-
-export async function authenticateStaffAccount(input: { username: string; password: string }) {
-  const db = await requireDb();
-  const username = normalizeUsername(input.username);
-  const row = (await db.select({ user: users, profile: staffProfiles, credential: staffCredentials }).from(staffCredentials).innerJoin(users, eq(staffCredentials.userId, users.id)).leftJoin(staffProfiles, eq(users.id, staffProfiles.userId)).where(eq(staffCredentials.username, username)).limit(1))[0];
-  const invalid = () => { throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid account name or password." }); };
-  if (!row || !row.profile?.active || !(await verifyPassword(input.password, row.credential.passwordHash))) invalid();
-  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, row.user.id));
-  return { user: row.user, mustChangePassword: row.credential.mustChangePassword };
-}
-
-export async function changeStaffPassword(user: User, input: { currentPassword: string; newPassword: string }) {
-  const passwordError = passwordPolicyError(input.newPassword);
-  if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
-  const db = await requireDb();
-  const credential = (await db.select().from(staffCredentials).where(eq(staffCredentials.userId, user.id)).limit(1))[0];
-  if (!credential || !(await verifyPassword(input.currentPassword, credential.passwordHash))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Current password is incorrect." });
-  await db.update(staffCredentials).set({ passwordHash: await hashPassword(input.newPassword), mustChangePassword: false, passwordChangedAt: new Date() }).where(eq(staffCredentials.userId, user.id));
-  await writeAudit(user.id, "staff_password_changed", "user", user.id, {});
-  return { success: true };
-}
-
-export async function passwordChangeRequired(userId: number) {
-  const db = await requireDb();
-  const credential = (await db.select({ mustChangePassword: staffCredentials.mustChangePassword }).from(staffCredentials).where(eq(staffCredentials.userId, userId)).limit(1))[0];
-  return credential?.mustChangePassword ?? false;
 }
 
 export async function setDepartmentActive(user: User, input: { departmentId: number; active: boolean }) {
@@ -590,23 +546,6 @@ export async function updateDepartment(user: User, input: { departmentId: number
   const db = await requireDb();
   await db.update(departments).set({ name: input.name, code: input.code.toUpperCase(), description: input.description ?? null }).where(eq(departments.id, input.departmentId));
   await writeAudit(user.id, "department_updated", "department", input.departmentId, input);
-  return { success: true };
-}
-
-export async function setStaffActive(user: User, input: { userId: number; active: boolean }) {
-  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can activate or deactivate staff." });
-  const db = await requireDb();
-  await db.update(staffProfiles).set({ active: input.active }).where(eq(staffProfiles.userId, input.userId));
-  await writeAudit(user.id, input.active ? "staff_activated" : "staff_deactivated", "user", input.userId, input);
-  return { success: true };
-}
-
-export async function updateStaff(user: User, input: { userId: number; name: string; email?: string; departmentId: number; role: "hospital_admin" | "department_head" | "supervisor" | "staff" | "viewer"; title?: string }) {
-  if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can edit staff." });
-  const db = await requireDb();
-  await db.update(users).set({ name: input.name, email: input.email ?? null, role: input.role }).where(eq(users.id, input.userId));
-  await db.update(staffProfiles).set({ departmentId: input.departmentId, title: input.title ?? null }).where(eq(staffProfiles.userId, input.userId));
-  await writeAudit(user.id, "staff_updated", "user", input.userId, input);
   return { success: true };
 }
 
@@ -673,13 +612,12 @@ export async function getSettings(user: User) {
   if (!isAdmin(user)) throw new TRPCError({ code: "FORBIDDEN", message: "Only hospital administrators can access hospital-wide settings." });
   const db = await requireDb();
   await ensureNotificationRuleDefaults();
-  const [rules, notificationRuleRows, departmentRows, people] = await Promise.all([
+  const [rules, notificationRuleRows, departmentRows] = await Promise.all([
     db.select().from(escalationRules).orderBy(asc(escalationRules.name)),
     db.select().from(notificationRules).orderBy(asc(notificationRules.label)),
     db.select().from(departments).orderBy(asc(departments.name)),
-    db.select({ user: users, profile: staffProfiles, credential: { username: staffCredentials.username, mustChangePassword: staffCredentials.mustChangePassword } }).from(users).leftJoin(staffProfiles, eq(users.id, staffProfiles.userId)).leftJoin(staffCredentials, eq(users.id, staffCredentials.userId)).orderBy(asc(users.name)),
   ]);
-  return { rules, notificationRules: notificationRuleRows, departments: departmentRows, staff: people };
+  return { rules, notificationRules: notificationRuleRows, departments: departmentRows, staff: [] as const };
 }
 
 export async function updateEscalationRule(user: User, input: { ruleId: number; firstReminderMinutes: number; departmentHeadMinutes: number; adminMinutes: number; active: boolean }) {
@@ -713,9 +651,10 @@ export async function runOperationalCycle() {
   const recurring = await db.select({ recurring: recurringTasks, task: tasks }).from(recurringTasks).innerJoin(tasks, eq(recurringTasks.taskId, tasks.id)).where(and(eq(recurringTasks.active, true), eq(tasks.active, true)));
   let generatedAssignments = 0;
   for (const row of recurring) {
-    if (row.recurring.lastGeneratedFor === today) continue;
+    const scheduledDate = dateKey(row.recurring.nextRunAt);
+    if (row.recurring.lastGeneratedFor === today || scheduledDate > today) continue;
     const [hour, minute] = row.task.dueTime.split(":").map(Number);
-    const dueAt = new Date(now);
+    const dueAt = new Date(row.recurring.nextRunAt);
     dueAt.setHours(hour ?? 0, minute ?? 0, 0, 0);
     await db.insert(taskAssignments).values({ taskId: row.task.id, departmentId: row.task.departmentId, assignedUserId: row.task.assignedUserId, dueAt });
     await db.update(recurringTasks).set({ lastGeneratedFor: today, nextRunAt: computeNextDueDate(row.task.frequency, dueAt) }).where(eq(recurringTasks.id, row.recurring.id));
