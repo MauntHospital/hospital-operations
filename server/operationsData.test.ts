@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, createTask, dispatchWhatsAppTask, getDashboard, getMyDay, getReports, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult } from "./operationsData";
+import { completeTask, createTask, dispatchWhatsAppTask, getDashboard, getMyDay, getReports, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -278,6 +278,13 @@ describe("operational backend mutations", () => {
     const fake = makeDb([]);
     state.db = fake.db;
     await expect(createTask(admin, { name: "Daily safety check", departmentId: 4, frequency: "daily", dueTime: "08:00", priority: "medium", category: "Safety", checklist: [] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("denies non-administrator managers from changing weighted task deductions", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(updateTaskScoringRule(actor, { ruleId: 1, weightTenths: 30 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(fake.writes).toEqual([]);
   });
 
   it("generates the next daily assignment and surfaces it in My Day instead of prior-day completed work", async () => {
