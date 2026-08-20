@@ -767,6 +767,8 @@ export async function getReports(user: User) {
       pendingOrNoReply: dashboard.departmentAccountability.reduce((total, department) => total + department.pending + department.awaitingReply, 0),
       pointsLost: dashboard.departmentAccountability.reduce((total, department) => total + department.pointsLost, 0),
     },
+    complianceSummary: dashboard.complianceSummary,
+    repeatedProblemTrends: Object.entries(issueRows.reduce<Record<string, number>>((counts, issue) => { counts[issue.category] = (counts[issue.category] ?? 0) + 1; return counts; }, {})).map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
     departmentPointTrends: dashboard.departmentAccountability.map(department => {
       let runningScore = 100;
       const events = (eventsByDepartment.get(department.departmentId) ?? []).map(event => {
