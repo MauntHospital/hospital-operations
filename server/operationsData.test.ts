@@ -323,6 +323,18 @@ describe("operational backend mutations", () => {
     await expect(getManagementActions(departmentHead)).resolves.toEqual([]);
   });
 
+  it("permits manager roles to update Version 2 risks and management actions", async () => {
+    const riskFake = makeDb([[{ id: 1, mitigationPlan: null, residualRisk: null, reviewDate: null }]]);
+    state.db = riskFake.db;
+    await expect(updateRisk(supervisor, { riskId: 1, status: "mitigating", mitigationPlan: "Schedule mitigation review" })).resolves.toEqual({ success: true });
+    expect(riskFake.writes.some(write => write.kind === "update")).toBe(true);
+
+    const actionFake = makeDb([[{ id: 2, completionNotes: null, verification: null, verifiedByUserId: null, verifiedAt: null }]]);
+    state.db = actionFake.db;
+    await expect(updateManagementAction(departmentHead, { actionId: 2, status: "completed", verification: "Manager verified" })).resolves.toEqual({ success: true });
+    expect(actionFake.writes.some(write => write.kind === "update")).toBe(true);
+  });
+
   it("denies viewer roles from Version 2 management read paths", async () => {
     const fake = makeDb([]);
     state.db = fake.db;
