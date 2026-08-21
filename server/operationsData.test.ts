@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { acknowledgeWhatsAppTask, completeTask, completeTaskDirectlyByManager, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, isAdmin, isManager, prepareWhatsAppTask, recordWhatsAppTaskOutcome, reviewWhatsAppTask, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
+import { acknowledgeWhatsAppTask, completeTask, completeTaskDirectlyByManager, createDutyRoster, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getOperationalAlerts, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, importDutyRosters, isAdmin, isManager, prepareWhatsAppTask, recordWhatsAppTaskOutcome, reviewWhatsAppTask, runOperationalCycle, saveChecklistResult, updateManagementAction, updateOperationalAlert, updateRisk, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -464,6 +464,53 @@ describe("operational backend mutations", () => {
     expect(sundayTask.recurrenceRule).toBe("weekly:sunday");
     expect(assignments.some(dueAt => dueAt.getDay() === 6)).toBe(true);
     expect(assignments.some(dueAt => dueAt.getDay() === 0)).toBe(true);
+  });
+
+  it("creates roster entries only for active staff in the selected department and rejects duplicate slots", async () => {
+    const rosterInput = { departmentId: 4, userId: 7, dutyDate: new Date("2026-08-23T00:00:00.000Z"), shift: "Day", startTime: "08:00", endTime: "16:00", assignedDuty: "Imaging coverage" };
+    const createdFake = makeDb([[{ user: actor, profile: { userId: 7, departmentId: 4, active: true } }], []]);
+    state.db = createdFake.db;
+    await expect(createDutyRoster(supervisor, rosterInput)).resolves.toEqual({ id: 501 });
+    expect(createdFake.writes.some(write => (write.payload as any)?.assignedDuty === "Imaging coverage")).toBe(true);
+
+    const duplicateFake = makeDb([[{ user: actor, profile: { userId: 7, departmentId: 4, active: true } }], [{ id: 88 }]]);
+    state.db = duplicateFake.db;
+    await expect(createDutyRoster(supervisor, rosterInput)).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringMatching(/matching roster slot/i) });
+
+    state.db = makeDb([]).db;
+    await expect(createDutyRoster(actor, rosterInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("imports valid roster rows while returning row-level feedback for invalid or duplicate entries", async () => {
+    const rows = [
+      { departmentId: 4, userId: 7, dutyDate: new Date("2026-08-23T00:00:00.000Z"), shift: "Day", startTime: "08:00", endTime: "16:00", assignedDuty: "Imaging coverage" },
+      { departmentId: 4, userId: 8, dutyDate: new Date("2026-08-23T00:00:00.000Z"), shift: "Day", startTime: "08:00", endTime: "16:00", assignedDuty: "Radiation safety" },
+    ];
+    const fake = makeDb([
+      [{ user: actor, profile: { userId: 7, departmentId: 4, active: true } }], [],
+      [{ user: { ...actor, id: 8 }, profile: { userId: 8, departmentId: 5, active: true } }],
+    ]);
+    state.db = fake.db;
+    const result = await importDutyRosters(supervisor, { rows });
+    expect(result).toEqual({ createdCount: 1, errors: [{ row: 2, message: "The selected staff member must belong to the selected department." }] });
+  });
+
+  it("shows alert ownership history and supports accountable acknowledgement and resolution for managers only", async () => {
+    const openAlert = { id: 44, title: "Task overdue", body: "Follow up", handlingStatus: "open", ownerUserId: null, createdAt: new Date() };
+    const managerRows = [{ id: 1, name: "Hospital Admin", role: "hospital_admin" }];
+    const historyRows = [{ audit: { id: 71, entityId: 44, action: "operational_alert_assign", createdAt: new Date() }, actorName: "Hospital Admin" }];
+    const listingFake = makeDb([[openAlert], managerRows, historyRows]);
+    state.db = listingFake.db;
+    const alerts = await getOperationalAlerts(supervisor);
+    expect(alerts.alerts[0]).toMatchObject({ ownerName: null, history: [expect.objectContaining({ actorName: "Hospital Admin" })] });
+
+    const handlingFake = makeDb([[openAlert], [managerRows[0]]]);
+    state.db = handlingFake.db;
+    await expect(updateOperationalAlert(supervisor, { notificationId: 44, action: "acknowledge", note: "Reviewing duty coverage." })).resolves.toEqual({ success: true });
+    expect(handlingFake.writes.some(write => (write.payload as any)?.handlingStatus === "acknowledged" && (write.payload as any)?.ownerUserId === 3)).toBe(true);
+
+    state.db = makeDb([]).db;
+    await expect(updateOperationalAlert(actor, { notificationId: 44, action: "resolve" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("denies hospital administrators from creating department task schedules reserved for the super administrator", async () => {

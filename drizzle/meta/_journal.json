@@ -43,6 +43,13 @@
       "when": 1787231095869,
       "tag": "0005_cold_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787309896306,
+      "tag": "0006_colorful_white_tiger",
+      "breakpoints": true
     }
   ]
 }

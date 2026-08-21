@@ -106,3 +106,9 @@
 - [x] Backfill assignment status from existing WhatsApp outcomes so prior closed dispatches no longer appear as overdue Control Tower work.
 - [x] Document section-to-section data flows, navigation paths, and workflow dependencies across the hospital operations system.
 - [x] Identify and prioritize the remaining unconnected, manual, or intentionally separate workflows.
+- [x] Add manager-controlled single-shift roster creation with department, staff member, date, time, duty, and attendance details.
+- [x] Add CSV roster import with a downloadable template, validation summary, duplicate protection, and per-row error feedback.
+- [x] Add alert ownership, acknowledgement, and resolution status with a visible handling audit trail.
+- [x] Add alert handling-status filtering so managers can focus on open, acknowledged, or resolved work.
+- [x] Add role, roster-import, alert-state, and regression coverage, then verify desktop and mobile workflows before publishing.
+- [x] Save and publish the verified roster creation/import and alert accountability update.

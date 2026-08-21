@@ -937,6 +937,88 @@ export async function updateDutyAttendance(user: User, input: { rosterId: number
   return { success: true };
 }
 
+type RosterEntryInput = { departmentId: number; userId: number; dutyDate: Date; shift: string; startTime: string; endTime: string; assignedDuty: string; attendance?: "present" | "absent" | "late" | "leave" | "replacement"; notes?: string };
+
+async function validateRosterEntry(db: Awaited<ReturnType<typeof requireDb>>, input: RosterEntryInput) {
+  const staffMember = (await db.select({ user: users, profile: staffProfiles }).from(users).innerJoin(staffProfiles, eq(staffProfiles.userId, users.id)).where(eq(users.id, input.userId)).limit(1))[0];
+  if (!staffMember?.profile.active) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose an active staff member for this roster entry." });
+  if (staffMember.profile.departmentId !== input.departmentId) throw new TRPCError({ code: "BAD_REQUEST", message: "The selected staff member must belong to the selected department." });
+  const duplicate = (await db.select().from(dutyRosters).where(and(eq(dutyRosters.departmentId, input.departmentId), eq(dutyRosters.userId, input.userId), eq(dutyRosters.dutyDate, input.dutyDate), eq(dutyRosters.shift, input.shift), eq(dutyRosters.startTime, input.startTime))).limit(1))[0];
+  if (duplicate) throw new TRPCError({ code: "CONFLICT", message: "This staff member already has a matching roster slot." });
+}
+
+export async function createDutyRoster(user: User, input: RosterEntryInput) {
+  ensureManager(user);
+  const db = await requireDb();
+  await validateRosterEntry(db, input);
+  const created = await db.insert(dutyRosters).values({ ...input, attendance: input.attendance ?? "present", notes: input.notes?.trim() || null }).$returningId();
+  await writeAudit(user.id, "duty_roster_created", "duty_roster", created[0]!.id, { departmentId: input.departmentId, userId: input.userId, dutyDate: input.dutyDate.toISOString(), shift: input.shift });
+  return { id: created[0]!.id };
+}
+
+export async function importDutyRosters(user: User, input: { rows: RosterEntryInput[] }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const created: number[] = [];
+  const errors: Array<{ row: number; message: string }> = [];
+  for (let index = 0; index < input.rows.length; index += 1) {
+    const row = input.rows[index]!;
+    try {
+      await validateRosterEntry(db, row);
+      const roster = await db.insert(dutyRosters).values({ ...row, attendance: row.attendance ?? "present", notes: row.notes?.trim() || null }).$returningId();
+      created.push(roster[0]!.id);
+      await writeAudit(user.id, "duty_roster_imported", "duty_roster", roster[0]!.id, { importRow: index + 1, departmentId: row.departmentId, userId: row.userId, dutyDate: row.dutyDate.toISOString(), shift: row.shift });
+    } catch (error) {
+      errors.push({ row: index + 1, message: error instanceof TRPCError ? error.message : "Roster row could not be imported." });
+    }
+  }
+  return { createdCount: created.length, errors };
+}
+
+export async function getOperationalAlerts(user: User) {
+  ensureManager(user);
+  const db = await requireDb();
+  const [alertRows, managerRows, historyRows] = await Promise.all([
+    db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(100),
+    db.select({ id: users.id, name: users.name, role: users.role }).from(users).where(inArray(users.role, managerRoles)),
+    db.select({ audit: auditLogs, actorName: users.name }).from(auditLogs).leftJoin(users, eq(auditLogs.actorUserId, users.id)).where(eq(auditLogs.entityType, "notification")).orderBy(desc(auditLogs.createdAt)).limit(300),
+  ]);
+  const names = new Map(managerRows.map(row => [row.id, row.name || `Manager #${row.id}`]));
+  return {
+    managers: managerRows,
+    alerts: alertRows.map(alert => ({
+      ...alert,
+      ownerName: alert.ownerUserId ? names.get(alert.ownerUserId) ?? "Unknown manager" : null,
+      acknowledgedByName: alert.acknowledgedByUserId ? names.get(alert.acknowledgedByUserId) ?? "Unknown manager" : null,
+      resolvedByName: alert.resolvedByUserId ? names.get(alert.resolvedByUserId) ?? "Unknown manager" : null,
+      history: historyRows.filter(row => row.audit.entityId === alert.id).slice(0, 4),
+    })),
+  };
+}
+
+export async function updateOperationalAlert(user: User, input: { notificationId: number; action: "assign" | "acknowledge" | "resolve" | "reopen"; ownerUserId?: number; note?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const alert = (await db.select().from(notifications).where(eq(notifications.id, input.notificationId)).limit(1))[0];
+  if (!alert) throw new TRPCError({ code: "NOT_FOUND", message: "Operational alert not found." });
+  const selectedOwnerId = input.ownerUserId ?? alert.ownerUserId ?? user.id;
+  const owner = (await db.select().from(users).where(and(eq(users.id, selectedOwnerId), inArray(users.role, managerRoles))).limit(1))[0];
+  if (!owner) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a valid manager to own this alert." });
+  const now = new Date();
+  if (input.action === "assign") {
+    await db.update(notifications).set({ ownerUserId: selectedOwnerId, handlingNote: input.note?.trim() || alert.handlingNote }).where(eq(notifications.id, alert.id));
+  } else if (input.action === "acknowledge") {
+    if (alert.handlingStatus === "resolved") throw new TRPCError({ code: "BAD_REQUEST", message: "Reopen a resolved alert before acknowledging it again." });
+    await db.update(notifications).set({ ownerUserId: selectedOwnerId, handlingStatus: "acknowledged", acknowledgedByUserId: user.id, acknowledgedAt: now, handlingNote: input.note?.trim() || alert.handlingNote }).where(eq(notifications.id, alert.id));
+  } else if (input.action === "resolve") {
+    await db.update(notifications).set({ ownerUserId: selectedOwnerId, handlingStatus: "resolved", resolvedByUserId: user.id, resolvedAt: now, handlingNote: input.note?.trim() || alert.handlingNote }).where(eq(notifications.id, alert.id));
+  } else {
+    await db.update(notifications).set({ handlingStatus: "open", resolvedByUserId: null, resolvedAt: null, handlingNote: input.note?.trim() || alert.handlingNote }).where(eq(notifications.id, alert.id));
+  }
+  await writeAudit(user.id, `operational_alert_${input.action}`, "notification", alert.id, { ownerUserId: selectedOwnerId, note: input.note?.trim() || null });
+  return { success: true };
+}
+
 export async function getCalendar(user: User) {
   await ensureOperationalDemo(user);
   const db = await requireDb();

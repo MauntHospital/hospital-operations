@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/trpc", () => ({
-  trpc: { operations: { dashboard: { useQuery: () => ({ isLoading: false, data: { notifications: [{ id: 1, title: "Task overdue", body: "Department review required.", createdAt: new Date("2026-08-20T08:00:00Z") }] } }) } } },
+  trpc: { operations: { operationalAlerts: { useQuery: () => ({ isLoading: false, data: { alerts: [{ id: 1, title: "Task overdue", body: "Department review required.", handlingStatus: "open", ownerUserId: null, createdAt: new Date("2026-08-20T08:00:00Z"), history: [] }], managers: [{ id: 1, name: "Hospital Admin", role: "hospital_admin" }] } }) }, operationalAlertUpdate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) } }, useUtils: () => ({ operations: { operationalAlerts: { invalidate: vi.fn() }, dashboard: { invalidate: vi.fn() } } }) },
 }));
 
 import NotificationCenter from "./NotificationCenter";
@@ -18,5 +18,7 @@ describe("NotificationCenter", () => {
     act(() => root.render(<NotificationCenter />));
     expect(container.textContent).toContain("Task overdue");
     expect(container.textContent).toContain("Department review required.");
+    expect(container.textContent).toContain("No owner assigned");
+    expect(container.textContent).toContain("Acknowledge");
   });
 });

@@ -10,9 +10,11 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     operations: {
-      modules: { useQuery: () => ({ isLoading: false, data: { rosters: [], handovers: [], departments: [] } }) },
+      modules: { useQuery: () => ({ isLoading: false, data: { rosters: [], handovers: [], departments: [], staff: [] } }) },
       handoverCreate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
       dutyAttendanceUpdate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+      dutyRosterCreate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+      dutyRosterImport: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
     },
     useUtils: () => ({ operations: { modules: { invalidate: vi.fn() }, dashboard: { invalidate: vi.fn() } } }),
   },
@@ -43,6 +45,8 @@ describe("Duty roster empty state", () => {
 
     expect(container.textContent).toContain("No duty coverage is recorded for today");
     expect(container.textContent).toContain("Add or import the current shift roster");
+    expect(container.textContent).toContain("Add shift");
+    expect(container.textContent).toContain("Import CSV");
     expect(container.querySelector("table")).toBeNull();
   });
 });

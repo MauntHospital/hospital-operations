@@ -22,6 +22,7 @@ export const issuePriorities = ["critical", "high", "medium", "low"] as const;
 export const issueStatuses = ["open", "assigned", "in_progress", "escalated", "resolved", "closed"] as const;
 export const equipmentStatuses = ["working", "damaged", "under_maintenance", "out_of_service", "retired"] as const;
 export const attendanceStatuses = ["present", "absent", "late", "leave", "replacement"] as const;
+export const notificationHandlingStatuses = ["open", "acknowledged", "resolved"] as const;
 export const riskStatuses = ["open", "mitigating", "accepted", "resolved", "closed"] as const;
 export const managementActionStatuses = ["open", "in_progress", "completed", "overdue", "cancelled"] as const;
 
@@ -385,6 +386,7 @@ export const dutyRosters = mysqlTable("dutyRosters", {
   notes: text("notes"),
 }, table => ({
   rosterDateIdx: index("roster_date_idx").on(table.dutyDate),
+  rosterSlotUnique: uniqueIndex("roster_slot_unique").on(table.departmentId, table.userId, table.dutyDate, table.shift, table.startTime),
 }));
 
 export const departmentStaffingTargets = mysqlTable("departmentStaffingTargets", {
@@ -425,10 +427,19 @@ export const notifications = mysqlTable("notifications", {
   body: text("body").notNull(),
   entityType: varchar("entityType", { length: 64 }),
   entityId: int("entityId"),
+  handlingStatus: mysqlEnum("handlingStatus", notificationHandlingStatuses).default("open").notNull(),
+  ownerUserId: int("ownerUserId"),
+  acknowledgedByUserId: int("acknowledgedByUserId"),
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  resolvedByUserId: int("resolvedByUserId"),
+  resolvedAt: timestamp("resolvedAt"),
+  handlingNote: text("handlingNote"),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => ({
   recipientIdx: index("notification_recipient_idx").on(table.userId),
+  handlingIdx: index("notification_handling_idx").on(table.handlingStatus),
+  ownerIdx: index("notification_owner_idx").on(table.ownerUserId),
 }));
 
 export const operationalIndicatorRules = mysqlTable("operationalIndicatorRules", {
