@@ -220,8 +220,8 @@ describe("operational backend mutations", () => {
     expect(result.messageText).toMatch(/Weekly task/);
   });
 
-  it("lets an operations manager complete a department task directly without creating a WhatsApp dispatch or score event", async () => {
-    const directDetail = { ...detail, assignment: { ...detail.assignment, status: "in_progress" }, task: { ...detail.task, approvalRequired: true } };
+  it("lets an operations manager complete an un-distributed overdue department task directly without creating a WhatsApp dispatch or score event", async () => {
+    const directDetail = { ...detail, assignment: { ...detail.assignment, status: "overdue", dueAt: new Date("2026-08-19T09:00:00.000Z") }, task: { ...detail.task, approvalRequired: true } };
     const fake = makeDb([
       [{ value: 1 }], [{ value: 1 }], [directDetail], [], [], [],
     ]);
@@ -347,6 +347,7 @@ describe("operational backend mutations", () => {
     expect(dashboard.taskCounts).toMatchObject({ total: 2, scheduledToday: 1, completed: 1, overdue: 1 });
     expect(dashboard.departmentHealth).toEqual([expect.objectContaining({ id: 4, total: 2, completed: 1, overdue: 1 })]);
     expect(dashboard.recentAssignments.map(row => row.id)).toEqual([77, 79]);
+    expect(dashboard.overdueManagerAssignments).toEqual([expect.objectContaining({ id: 79, effectiveStatus: "overdue" })]);
   });
 
   it("uses the same current-day daily, weekly, and monthly assignments in Control Tower as the WhatsApp task register", async () => {

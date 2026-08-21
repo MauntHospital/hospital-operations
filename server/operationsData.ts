@@ -277,7 +277,7 @@ export async function getDashboard(user: User) {
   await ensureVersion2Defaults();
   const db = await requireDb();
   const [assignmentRows, issueRows, equipmentRows, inventoryRows, expiryRows, departmentRows, notificationRows, dispatchRows, pointRows, riskRows, managementActionRows, handoverRows, staffingTargetRows, rosterRows, indicatorRules] = await Promise.all([
-    db.select({ id: taskAssignments.id, status: taskAssignments.status, dueAt: taskAssignments.dueAt, taskName: tasks.name, priority: tasks.priority, frequency: tasks.frequency, departmentId: departments.id, departmentName: departments.name, assignedUserId: taskAssignments.assignedUserId, whatsappStatus: whatsappTaskDispatches.status }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)),
+    db.select({ id: taskAssignments.id, status: taskAssignments.status, dueAt: taskAssignments.dueAt, taskName: tasks.name, priority: tasks.priority, frequency: tasks.frequency, departmentId: departments.id, departmentName: departments.name, assignedUserId: taskAssignments.assignedUserId, whatsappDispatchId: whatsappTaskDispatches.id, whatsappStatus: whatsappTaskDispatches.status }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)),
     db.select().from(issues).orderBy(desc(issues.updatedAt)),
     db.select().from(equipment),
     db.select().from(inventory),
@@ -398,6 +398,7 @@ export async function getDashboard(user: User) {
     complianceSummary: { hospitalRate: totalDispatched ? Math.round((totalCompleted / totalDispatched) * 100) : 100, dispatched: totalDispatched, completed: totalCompleted },
     notifications: notificationRows,
     recentAssignments: activeAssignmentRows.slice(0, 6).map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.status, row.dueAt, now) })),
+    overdueManagerAssignments: activeAssignmentRows.filter(row => operationalAssignmentStatus(row.status, row.dueAt, now) === "overdue" && !row.whatsappDispatchId).map(row => ({ ...row, effectiveStatus: "overdue" as const })),
     whatsappTodayAssignments: todayAssignmentRows.filter(row => ["daily", "weekly", "monthly"].includes(row.frequency)).map(row => ({ ...row, effectiveStatus: row.whatsappStatus ?? (row.status === "completed" ? "completed" : operationalAssignmentStatus(row.status, row.dueAt, now)), workflowStatus: row.whatsappStatus ?? (row.status === "completed" ? "manager_completed" : "not_distributed") })),
   };
 }

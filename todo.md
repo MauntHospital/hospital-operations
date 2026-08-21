@@ -112,3 +112,8 @@
 - [x] Add alert handling-status filtering so managers can focus on open, acknowledged, or resolved work.
 - [x] Add role, roster-import, alert-state, and regression coverage, then verify desktop and mobile workflows before publishing.
 - [x] Save and publish the verified roster creation/import and alert accountability update.
+- [x] Diagnose why Control Tower overdue assignments lack a manager completion or resolution path.
+- [x] Add a manager-safe completion or disposition workflow for overdue operational assignments without bypassing WhatsApp accountability.
+- [x] Add overdue-resolution regressions, verify desktop/mobile controls, and publish the correction.
+- [x] Save and publish the verified overdue-task manager-resolution update.
+- [x] Make overdue task completion actions directly visible on mobile without requiring horizontal table scrolling.
