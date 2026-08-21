@@ -104,3 +104,5 @@
 - [x] Add regression coverage proving both manager views use consistent task counts and lifecycle status scope.
 - [x] Verify the synchronized Control Tower and WhatsApp register on desktop and mobile, then publish the correction.
 - [x] Backfill assignment status from existing WhatsApp outcomes so prior closed dispatches no longer appear as overdue Control Tower work.
+- [x] Document section-to-section data flows, navigation paths, and workflow dependencies across the hospital operations system.
+- [x] Identify and prioritize the remaining unconnected, manual, or intentionally separate workflows.
