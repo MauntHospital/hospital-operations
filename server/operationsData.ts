@@ -294,7 +294,20 @@ export async function getDashboard(user: User) {
     db.select().from(operationalIndicatorRules).where(eq(operationalIndicatorRules.active, true)),
   ]);
   const now = new Date();
-  const statusCounts = assignmentRows.reduce<Record<string, number>>((total, assignment) => {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const todayAssignmentRows = assignmentRows.filter(assignment => {
+    const dueAt = new Date(assignment.dueAt);
+    return dueAt >= todayStart && dueAt < tomorrowStart;
+  });
+  const activeAssignmentRows = assignmentRows.filter(assignment => {
+    const dueAt = new Date(assignment.dueAt);
+    const dueToday = dueAt >= todayStart && dueAt < tomorrowStart;
+    const unresolvedCarryOver = dueAt < todayStart && !["completed", "pending_approval"].includes(assignment.status);
+    return dueToday || unresolvedCarryOver;
+  });
+  const statusCounts = activeAssignmentRows.reduce<Record<string, number>>((total, assignment) => {
     const status = operationalAssignmentStatus(assignment.status, assignment.dueAt, now);
     total[status] = (total[status] ?? 0) + 1;
     return total;
@@ -338,7 +351,7 @@ export async function getDashboard(user: User) {
     return weights[a.severity as keyof typeof weights] - weights[b.severity as keyof typeof weights];
   }).slice(0, 12);
   const departmentHealth = departmentRows.map(department => {
-    const group = assignmentRows.filter(row => row.departmentId === department.id);
+    const group = activeAssignmentRows.filter(row => row.departmentId === department.id);
     const overdue = group.filter(row => operationalAssignmentStatus(row.status, row.dueAt, now) === "overdue").length;
     const activeIssues = issueRows.filter(issue => issue.departmentId === department.id && !["resolved", "closed"].includes(issue.status)).length;
     const completed = group.filter(row => row.status === "completed").length;
@@ -372,7 +385,7 @@ export async function getDashboard(user: User) {
     operationalStatus,
     indicatorStates,
     attentionItems,
-    taskCounts: { total: assignmentRows.length, completed: statusCounts.completed ?? 0, pending: (statusCounts.not_started ?? 0) + (statusCounts.in_progress ?? 0) + (statusCounts.pending_approval ?? 0), overdue: statusCounts.overdue ?? 0, noReply: todayDispatches.filter(dispatch => dispatch.status === "no_reply").length, awaitingReply: todayDispatches.filter(dispatch => ["sent", "acknowledged"].includes(dispatch.status)).length },
+    taskCounts: { total: activeAssignmentRows.length, scheduledToday: todayAssignmentRows.length, completed: statusCounts.completed ?? 0, pending: (statusCounts.not_started ?? 0) + (statusCounts.in_progress ?? 0) + (statusCounts.pending_approval ?? 0), overdue: statusCounts.overdue ?? 0, noReply: todayDispatches.filter(dispatch => dispatch.status === "no_reply").length, awaitingReply: todayDispatches.filter(dispatch => ["sent", "acknowledged"].includes(dispatch.status)).length },
     issueCounts: { critical: issueRows.filter(issue => issue.priority === "critical" && !["resolved", "closed"].includes(issue.status)).length, high: issueRows.filter(issue => issue.priority === "high" && !["resolved", "closed"].includes(issue.status)).length, open: issueRows.filter(issue => !["resolved", "closed"].includes(issue.status)).length },
     equipmentCounts: { total: equipmentRows.length, working: equipmentRows.filter(row => row.status === "working").length, attention: equipmentRows.filter(row => row.status !== "working").length, outOfService: equipmentOutOfService.length, maintenanceOverdue: maintenanceOverdue.length },
     inventoryCounts: { shortages: inventoryRows.filter(item => item.quantity <= Math.max(item.reorderLevel, item.minimumStock ?? 0)).length, stockOuts: stockOuts.length, lowStock: lowStockItems.length, expiringSoon: (expiryCounts.within_30_days ?? 0) + (expiryCounts.within_60_days ?? 0), expired: expiryCounts.expired ?? 0 },
@@ -384,7 +397,7 @@ export async function getDashboard(user: User) {
     departmentAccountability,
     complianceSummary: { hospitalRate: totalDispatched ? Math.round((totalCompleted / totalDispatched) * 100) : 100, dispatched: totalDispatched, completed: totalCompleted },
     notifications: notificationRows,
-    recentAssignments: assignmentRows.slice(0, 6).map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.status, row.dueAt, now) })),
+    recentAssignments: activeAssignmentRows.slice(0, 6).map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.status, row.dueAt, now) })),
   };
 }
 
@@ -445,7 +458,7 @@ export async function getWhatsAppTaskRegister(user: User) {
       pending: rows.filter(row => ["pending", "no_reply"].includes(row.dispatch?.status ?? "")).length,
       excused: rows.filter(row => row.dispatch?.status === "excused").length,
       awaitingAcknowledgement: rows.filter(row => row.dispatch?.status === "sent").length,
-      notSent: rows.filter(row => !row.dispatch || ["prepared", "copied"].includes(row.dispatch.status)).length,
+      notSent: rows.filter(row => row.assignment.status !== "completed" && (!row.dispatch || ["prepared", "copied"].includes(row.dispatch.status))).length,
     },
     cadenceSummary,
   };
@@ -463,6 +476,7 @@ export async function prepareWhatsAppTask(user: User, input: { assignmentId: num
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const row = await getWhatsAppTaskContext(input.assignmentId);
+  if (row.assignment.status === "completed") throw new TRPCError({ code: "BAD_REQUEST", message: "This task was completed directly and cannot be added to the WhatsApp workflow." });
   const existing = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
   const messageText = input.messageText?.trim() || whatsappTaskMessage({ taskName: row.task.name, departmentName: row.department.name, dueAt: row.assignment.dueAt, frequency: row.task.frequency });
   if (existing) return { dispatchId: existing.id, messageText: existing.messageText, status: existing.status, alreadyPrepared: true };
@@ -503,6 +517,7 @@ export async function acknowledgeWhatsAppTask(user: User, input: { dispatchId: n
   const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
   if (!dispatch) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
   if (["prepared", "copied"].includes(dispatch.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Confirm the manual WhatsApp send before recording acknowledgement." });
+  if (!["sent", "acknowledged"].includes(dispatch.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "This WhatsApp task already has an end-of-day outcome and cannot be acknowledged again." });
   await db.update(whatsappTaskDispatches).set({ status: "acknowledged", acknowledgedAt: new Date(), responseNote: input.note?.trim() || dispatch.responseNote }).where(eq(whatsappTaskDispatches.id, dispatch.id));
   await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, "acknowledged", { dispatchId: dispatch.id, note: input.note });
   await writeAudit(user.id, "whatsapp_task_acknowledged", "whatsapp_dispatch", dispatch.id, { note: input.note });
@@ -516,6 +531,7 @@ export async function recordWhatsAppTaskOutcome(user: User, input: { dispatchId:
   const row = (await db.select({ dispatch: whatsappTaskDispatches, task: tasks }).from(whatsappTaskDispatches).innerJoin(tasks, eq(whatsappTaskDispatches.taskId, tasks.id)).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
   const dispatch = row.dispatch;
+  if (!["sent", "acknowledged"].includes(dispatch.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "This WhatsApp task already has a recorded outcome. Review or close it instead of replacing the outcome." });
   if (input.outcome === "excused" && !input.excusedReason?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Select or record an excused-task reason." });
   const shouldPenaltyApply = ["pending", "no_reply"].includes(input.outcome) && !dispatch.penaltyApplied;
   const now = new Date();
@@ -536,6 +552,7 @@ export async function reviewWhatsAppTask(user: User, input: { dispatchId: number
   const db = await requireDb();
   const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.id, input.dispatchId)).limit(1))[0];
   if (!dispatch) throw new TRPCError({ code: "NOT_FOUND", message: "WhatsApp task dispatch not found." });
+  if (dispatch.status === "closed") throw new TRPCError({ code: "BAD_REQUEST", message: "This WhatsApp task lifecycle is already closed." });
   if (!["completed", "pending", "no_reply", "excused", "reviewed", "closed"].includes(dispatch.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Record a department outcome before reviewing this task." });
   const now = new Date();
   const status = input.close ? "closed" : "reviewed";
@@ -596,6 +613,11 @@ export async function saveChecklistResult(user: User, input: { assignmentId: num
 export async function completeTask(user: User, input: { assignmentId: number; notes?: string }) {
   const db = await requireDb();
   const detail = await getTaskDetail(user, input.assignmentId);
+  if (isManager(user)) {
+    const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
+    if (dispatch) throw new TRPCError({ code: "BAD_REQUEST", message: "This task is already in the WhatsApp workflow. Record its outcome through the manager task register." });
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Managers should use Complete myself in the manager task register for work they perform directly." });
+  }
   const requiredChecklist = detail.checklist.filter(item => item.required);
   const completionBlock = taskCompletionBlockReason({ requiredChecklistCount: requiredChecklist.length, completedChecklistCount: requiredChecklist.filter(item => item.result).length });
   if (completionBlock) throw new TRPCError({ code: "BAD_REQUEST", message: completionBlock });

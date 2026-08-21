@@ -1,11 +1,16 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, ClipboardCheck, Clock3, TrendingDown } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Clock3, ShieldAlert, TrendingDown } from "lucide-react";
 import React from "react";
 
 export default function ReportsInsights() {
-  const report = trpc.operations.reports.useQuery();
+  const { user } = useAuth();
+  const isManager = Boolean(user && ["super_admin", "hospital_admin", "department_head", "supervisor"].includes(user.role));
+  const report = trpc.operations.reports.useQuery(undefined, { enabled: isManager });
+  if (!isManager) return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><ShieldAlert className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Manager access required</h1><p className="mt-2 text-sm leading-relaxed text-slate-500">Operational Insights is available to managers because it includes hospital-wide department performance and accountability data.</p></CardContent></Card>;
+  if (report.isError) return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><AlertTriangle className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Operational Insights is unavailable</h1><p className="mt-2 text-sm leading-relaxed text-slate-500">The report could not be loaded. Refresh the page or verify your manager access before trying again.</p></CardContent></Card>;
   if (report.isLoading || !report.data) return <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div className="h-36 animate-pulse rounded-2xl bg-slate-100" key={index} />)}</div>;
   const data = report.data;
   const acknowledgementTime = data.responseTimeAnalytics.averageAcknowledgementMinutes === null ? "—" : `${data.responseTimeAnalytics.averageAcknowledgementMinutes} min`;

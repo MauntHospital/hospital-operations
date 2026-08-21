@@ -134,6 +134,15 @@ describe("WhatsAppTaskRegister manager workflow", () => {
     expect(container.textContent).toContain("Monthly");
   });
 
+  it("labels historical dispatches as distributed records and shows only active sends as awaiting acknowledgement", () => {
+    state.registerData = { ...makeRegisterData({ id: 501, status: "closed", messageText: "Radiology daily task" }), summary: { sent: 1, completed: 1, pending: 0, notSent: 0, awaitingAcknowledgement: 0 } };
+    act(() => root.render(<WhatsAppTaskRegister />));
+
+    expect(container.textContent).toContain("Distributed task records");
+    expect(container.textContent).toContain("0 awaiting acknowledgement");
+    expect(container.textContent).not.toContain("Awaiting department reply");
+  });
+
   it("shows daily, weekly, and monthly schedule cards even when a cadence has no task due today", () => {
     act(() => root.render(<WhatsAppTaskRegister />));
 

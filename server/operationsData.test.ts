@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, completeTaskDirectlyByManager, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, isAdmin, isManager, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
+import { acknowledgeWhatsAppTask, completeTask, completeTaskDirectlyByManager, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, isAdmin, isManager, prepareWhatsAppTask, recordWhatsAppTaskOutcome, reviewWhatsAppTask, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -260,8 +260,27 @@ describe("operational backend mutations", () => {
     const penalizedDispatch = { ...initialDispatch, status: "no_reply", penaltyApplied: true };
     const noDuplicateFake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ dispatch: penalizedDispatch, task: scoredTask }]]);
     state.db = noDuplicateFake.db;
-    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "pending" })).resolves.toEqual({ status: "pending", penaltyApplied: false, penaltyTenths: 0 });
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "pending" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/already has a recorded outcome/i) });
     expect(noDuplicateFake.writes.some(write => (write.payload as any)?.pointDelta === -30)).toBe(false);
+  });
+
+  it("preserves terminal WhatsApp and direct-completion states instead of reopening them through another lifecycle action", async () => {
+    const completedDirect = { assignment: { ...detail.assignment, status: "completed" }, task: detail.task, department: detail.department };
+    const directFake = makeDb([[{ value: 1 }], [{ value: 1 }], [completedDirect]]);
+    state.db = directFake.db;
+    await expect(prepareWhatsAppTask(admin, { assignmentId: 77 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/completed directly/i) });
+
+    const acknowledgementFake = makeDb([[{ id: 501, assignmentId: 77, status: "completed" }]]);
+    state.db = acknowledgementFake.db;
+    await expect(acknowledgeWhatsAppTask(admin, { dispatchId: 501 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/end-of-day outcome/i) });
+
+    const terminalOutcomeFake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ dispatch: { id: 501, assignmentId: 77, status: "reviewed", penaltyApplied: false }, task: { id: 5, priority: "high" } }]]);
+    state.db = terminalOutcomeFake.db;
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "completed" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/already has a recorded outcome/i) });
+
+    const closedFake = makeDb([[{ id: 501, assignmentId: 77, status: "closed" }]]);
+    state.db = closedFake.db;
+    await expect(reviewWhatsAppTask(admin, { dispatchId: 501 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/already closed/i) });
   });
 
   it("shows manual WhatsApp outcomes, point deductions, and report aggregates for the department scorecard", async () => {
@@ -295,6 +314,28 @@ describe("operational backend mutations", () => {
     expect(report.departmentPointTrends).toEqual([expect.objectContaining({ departmentName: "Radiology", events: [expect.objectContaining({ pointDelta: -10, scoreAfter: 99 })] })]);
     expect(report.complianceSummary).toMatchObject({ hospitalRate: 50, dispatched: 2, completed: 1 });
     expect(report.responseTimeAnalytics).toMatchObject({ acknowledgedCount: 0, respondedCount: 0, averageAcknowledgementMinutes: null, averageResponseMinutes: null });
+  });
+
+  it("keeps prior-day completed work out of Control Tower current-task and department-readiness totals while retaining unresolved carry-over", async () => {
+    const now = new Date();
+    const currentDueAt = new Date(now.getTime() + 60 * 60_000);
+    const priorDay = new Date(now.getTime() - 24 * 60 * 60_000);
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }],
+      [
+        { id: 77, status: "completed", dueAt: currentDueAt, taskName: "Current daily safety check", priority: "medium", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id },
+        { id: 78, status: "completed", dueAt: priorDay, taskName: "Prior-day completed check", priority: "medium", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id },
+        { id: 79, status: "overdue", dueAt: priorDay, taskName: "Unresolved safety carry-over", priority: "high", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id },
+      ],
+      [], [], [], [], [{ id: 4, name: "Radiology", active: true }], [], [], [], [], [], [], [], [], [],
+    ]);
+    state.db = fake.db;
+
+    const dashboard = await getDashboard(admin);
+
+    expect(dashboard.taskCounts).toMatchObject({ total: 2, scheduledToday: 1, completed: 1, overdue: 1 });
+    expect(dashboard.departmentHealth).toEqual([expect.objectContaining({ id: 4, total: 2, completed: 1, overdue: 1 })]);
+    expect(dashboard.recentAssignments.map(row => row.id)).toEqual([77, 79]);
   });
 
   it("reports the complete Version 2 accountability workflow with response times, risks, overdue actions, and repeated-problem trends", async () => {
@@ -434,6 +475,18 @@ describe("operational backend mutations", () => {
     state.db = fake.db;
     const register = await getWhatsAppTaskRegister(admin);
     expect(register.tasks).toEqual([expect.objectContaining({ dispatch: expect.objectContaining({ id: 90, status: "sent" }) })]);
+  });
+
+  it("does not count manager-completed assignments as WhatsApp work still awaiting distribution", async () => {
+    const now = new Date();
+    const directCompletion = { assignment: { id: 77, dueAt: now, status: "completed" }, task: { id: 5, name: "Manager equipment review", frequency: "daily", priority: "medium" }, department: { id: 4, name: "Radiology" }, dispatch: null };
+    const scheduledTask = { assignment: { id: 78, dueAt: now, status: "not_started" }, task: { id: 6, name: "Department safety check", frequency: "daily", priority: "medium" }, department: { id: 4, name: "Radiology" }, dispatch: null };
+    const fake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [directCompletion, scheduledTask], [], [], [{ id: 4, name: "Radiology", active: true }]]);
+    state.db = fake.db;
+
+    const register = await getWhatsAppTaskRegister(admin);
+
+    expect(register.summary).toMatchObject({ notSent: 1, sent: 0, completed: 0 });
   });
 
   it("keeps a pre-Version-2 task assignment visible in My Day after the command-center upgrade", async () => {

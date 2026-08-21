@@ -24,7 +24,7 @@ const navigation = [
   { icon: CalendarClock, label: "Roster", path: "/roster", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
   { icon: CalendarClock, label: "Handover", path: "/handover", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "staff"] },
   { icon: CalendarClock, label: "Calendar", path: "/calendar", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
-  { icon: FileBarChart, label: "Reports", path: "/reports", roles: ["super_admin", "hospital_admin", "department_head", "supervisor", "viewer"] },
+  { icon: FileBarChart, label: "Reports", path: "/reports", roles: ["super_admin", "hospital_admin", "department_head", "supervisor"] },
   { icon: Settings2, label: "Scoring rules", path: "/scoring-rules", roles: ["super_admin", "hospital_admin"] },
   { icon: Settings2, label: "Operations setup", path: "/settings", roles: ["super_admin", "hospital_admin"] },
   { icon: CalendarClock, label: "Task schedules", path: "/department-schedules", roles: ["super_admin"] },

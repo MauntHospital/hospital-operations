@@ -4,7 +4,7 @@ import NotFound from "@/pages/NotFound";
 import AppShell from "@/pages/AppShell";
 import { TaskCreate } from "@/pages/OperationsPage";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -28,8 +28,8 @@ function Router() {
       <Route path={"/department-schedules"}><DashboardLayout><DepartmentSchedules /></DashboardLayout></Route>
       <Route path={"/whatsapp-tasks"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
       <Route path={"/"}><AppShell view="dashboard" /></Route>
-      <Route path={"/my-day"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
-      <Route path={"/tasks/:id"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
+      <Route path={"/my-day"}><Redirect to="/whatsapp-tasks" replace /></Route>
+      <Route path={"/tasks/:id"}><Redirect to="/whatsapp-tasks" replace /></Route>
       <Route path={"/issues"}><AppShell view="issues" /></Route>
       <Route path={"/risks"}><DashboardLayout><RiskRegister /></DashboardLayout></Route>
       <Route path={"/management-actions"}><DashboardLayout><ManagementActions /></DashboardLayout></Route>

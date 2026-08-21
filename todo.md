@@ -87,3 +87,16 @@
 - [x] Add direct-completion workflow and permission regression coverage for manager-owned tasks.
 - [x] Verify direct manager completion on desktop and mobile, then publish the update.
 - [x] Save and publish the verified direct manager-completion update.
+- [x] Audit all manager-facing workflows for navigation, role access, task state, scoring, and data-consistency defects.
+- [x] Reproduce and fix prioritized defects in task ownership, WhatsApp lifecycle, dashboard totals, and manager workflow integrity.
+- [x] Add regression coverage for every validated workflow defect and run complete TypeScript and responsive verification.
+- [x] Publish the workflow-stabilization update with an issue-resolution summary.
+- [x] Replace stale My Day and unsupported task-creation navigation with manager-led task-register and schedule routes.
+- [x] Keep directly manager-completed tasks out of the WhatsApp “still to distribute” total and protect managers from bypassing an existing WhatsApp lifecycle.
+- [x] Add a clear no-current-coverage state to the duty-roster workspace when no roster entries match the operating date.
+- [x] Prevent WhatsApp preparation or acknowledgement from reopening directly completed, resolved, reviewed, or closed task workflows.
+- [x] Redirect retired My Day and task-detail URLs to the manager task register and clarify historical-versus-active WhatsApp metrics.
+- [x] Correct Control Tower task totals and department readiness so prior-day completed assignments do not appear as today’s work.
+- [x] Align reporting navigation and access feedback with manager-only reporting permissions.
+- [x] Ensure the no-duty-coverage roster state remains fully readable without horizontal scrolling on mobile.
+- [x] Distinguish today’s scheduled work from unresolved carry-over in Control Tower task labels and counts.
