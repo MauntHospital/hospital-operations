@@ -152,6 +152,7 @@ export const taskAssignments = mysqlTable("taskAssignments", {
   assigneeIdx: index("assignment_assignee_idx").on(table.assignedUserId),
   dueIdx: index("assignment_due_idx").on(table.dueAt),
   taskIdx: index("assignment_task_idx").on(table.taskId),
+  taskDueUnique: uniqueIndex("assignment_task_due_unique").on(table.taskId, table.dueAt),
 }));
 
 export const whatsappTaskDispatches = mysqlTable("whatsappTaskDispatches", {

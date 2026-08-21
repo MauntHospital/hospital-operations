@@ -12,4 +12,12 @@ describe("Version 2 data-preservation migration", () => {
     expect(sql).not.toMatch(/DELETE\s+FROM/i);
     expect(sql).not.toMatch(/TRUNCATE/i);
   });
+
+  it("adds the recurring task-assignment uniqueness safeguard without destructive schema operations", () => {
+    const sql = readFileSync(resolve(process.cwd(), "drizzle/0007_stormy_penance.sql"), "utf8");
+    expect(sql).toMatch(/ADD CONSTRAINT `assignment_task_due_unique` UNIQUE\(`taskId`,`dueAt`\)/);
+    expect(sql).not.toMatch(/DROP\s+TABLE/i);
+    expect(sql).not.toMatch(/DELETE\s+FROM/i);
+    expect(sql).not.toMatch(/TRUNCATE/i);
+  });
 });

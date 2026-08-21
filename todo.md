@@ -117,3 +117,17 @@
 - [x] Add overdue-resolution regressions, verify desktop/mobile controls, and publish the correction.
 - [x] Save and publish the verified overdue-task manager-resolution update.
 - [x] Make overdue task completion actions directly visible on mobile without requiring horizontal table scrolling.
+- [x] Audit all manager pages, routes, service procedures, data models, access controls, calculations, and cross-module connections.
+- [x] Exercise import/export, task, WhatsApp, roster, alert, risk, action, search, calendar, reporting, and mobile workflows with edge-case data.
+- [x] Identify and fix validated logic, data-integrity, validation, security, performance, accessibility, and UI/UX defects without removing working functionality.
+- [x] Add targeted regressions for every audit fix and run full test, type, database, and responsive verification.
+- [x] Publish the full-system audited stabilization release with a quality report and remaining-issues register.
+- [x] Remediate high-severity dependency-audit findings with compatible package and lockfile updates, then re-run the security audit.
+- [x] Correct the Operational Insights department-comparison labels so active operational completion is not misrepresented as WhatsApp-only compliance.
+- [x] Prevent duplicate open operational follow-up tasks from being created for the same inventory, expiry, or equipment source record.
+- [x] Enforce manager-only access server-side for Control Tower, operational modules, calendar, task details, and issue-history data exposed by manager workspaces.
+- [x] Repair confirmed duplicate task assignments, preserve any associated lifecycle data, and prevent duplicate task-and-due-time records from recurring.
+- [x] Reject roster creation and import rows whose start time is not earlier than the end time.
+- [x] Retire legacy staff-accessible task procedures so the current manager-led operating model is enforced server-side without relying on hidden routes.
+- [x] Document the current absence of a record-export workflow and confirm the audit scope only exercises implemented import and download-template functions.
+- [x] Save and publish the verified full-system audited stabilization release and quality report.

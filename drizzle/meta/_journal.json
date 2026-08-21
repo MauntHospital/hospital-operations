@@ -50,6 +50,13 @@
       "when": 1787309896306,
       "tag": "0006_colorful_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1787312237664,
+      "tag": "0007_stormy_penance",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,8 @@ describe("ReportsInsights", () => {
     expect(container.textContent).toContain("85%");
     expect(container.textContent).toContain("12 min");
     expect(container.textContent).toContain("95 min");
+    expect(container.textContent).toContain("Active department execution");
+    expect(container.textContent).toContain("WhatsApp reply compliance is shown separately above.");
     expect(container.textContent).toContain("Emergency");
     expect(container.textContent).toContain("Equipment");
   });

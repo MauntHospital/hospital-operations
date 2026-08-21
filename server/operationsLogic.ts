@@ -31,6 +31,7 @@ export function operationalAssignmentStatus(status: TaskStatus, dueAt: Date, now
 export function isMyDayAssignmentVisible(input: { frequency: string; priority: string; status: TaskStatus; dueAt: Date }, now = new Date()) {
   const status = operationalAssignmentStatus(input.status, input.dueAt, now);
   const sameOperatingDay = input.dueAt.getFullYear() === now.getFullYear() && input.dueAt.getMonth() === now.getMonth() && input.dueAt.getDate() === now.getDate();
+  if (["skipped", "failed"].includes(status)) return false;
   if (status === "completed") return sameOperatingDay;
   if (sameOperatingDay) return true;
   return input.priority === "critical";

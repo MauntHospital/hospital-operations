@@ -273,6 +273,7 @@ export async function ensureOperationalDemo(actor: User) {
 }
 
 export async function getDashboard(user: User) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   await ensureVersion2Defaults();
   const db = await requireDb();
@@ -303,8 +304,9 @@ export async function getDashboard(user: User) {
   });
   const activeAssignmentRows = assignmentRows.filter(assignment => {
     const dueAt = new Date(assignment.dueAt);
-    const dueToday = dueAt >= todayStart && dueAt < tomorrowStart;
-    const unresolvedCarryOver = dueAt < todayStart && !["completed", "pending_approval"].includes(assignment.status);
+    const closedStatus = ["completed", "pending_approval", "skipped", "failed"].includes(assignment.status);
+    const dueToday = dueAt >= todayStart && dueAt < tomorrowStart && !["skipped", "failed"].includes(assignment.status);
+    const unresolvedCarryOver = dueAt < todayStart && !closedStatus;
     return dueToday || unresolvedCarryOver;
   });
   const statusCounts = activeAssignmentRows.reduce<Record<string, number>>((total, assignment) => {
@@ -404,6 +406,7 @@ export async function getDashboard(user: User) {
 }
 
 export async function getMyDay(user: User) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const profile = (await db.select().from(staffProfiles).where(eq(staffProfiles.userId, user.id)).limit(1))[0];
@@ -566,6 +569,7 @@ export async function reviewWhatsAppTask(user: User, input: { dispatchId: number
 }
 
 export async function getTaskDetail(user: User, assignmentId: number) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const row = (await db.select({ assignment: taskAssignments, task: tasks, department: departments }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).where(eq(taskAssignments.id, assignmentId)).limit(1))[0];
@@ -580,6 +584,7 @@ export async function getTaskDetail(user: User, assignmentId: number) {
 }
 
 export async function saveChecklistResult(user: User, input: { assignmentId: number; checklistId: number; status: FindingStatus; note?: string }) {
+  ensureManager(user);
   const db = await requireDb();
   const detail = await getTaskDetail(user, input.assignmentId);
   const checklist = detail.checklist.find(item => item.id === input.checklistId);
@@ -614,13 +619,11 @@ export async function saveChecklistResult(user: User, input: { assignmentId: num
 }
 
 export async function completeTask(user: User, input: { assignmentId: number; notes?: string }) {
+  ensureManager(user);
   const db = await requireDb();
   const detail = await getTaskDetail(user, input.assignmentId);
-  if (isManager(user)) {
-    const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
-    if (dispatch) throw new TRPCError({ code: "BAD_REQUEST", message: "This task is already in the WhatsApp workflow. Record its outcome through the manager task register." });
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Managers should use Complete myself in the manager task register for work they perform directly." });
-  }
+  const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
+  if (dispatch) throw new TRPCError({ code: "BAD_REQUEST", message: "This task is already in the WhatsApp workflow. Record its outcome through the manager task register." });
   const requiredChecklist = detail.checklist.filter(item => item.required);
   const completionBlock = taskCompletionBlockReason({ requiredChecklistCount: requiredChecklist.length, completedChecklistCount: requiredChecklist.filter(item => item.result).length });
   if (completionBlock) throw new TRPCError({ code: "BAD_REQUEST", message: completionBlock });
@@ -668,6 +671,7 @@ export async function getDepartmentTaskSchedules(user: User) {
 }
 
 export async function listIssues(user: User) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const rows = await db.select({ issue: issues, departmentName: departments.name, reporterName: users.name }).from(issues).innerJoin(departments, eq(issues.departmentId, departments.id)).leftJoin(users, eq(issues.reportedBy, users.id)).orderBy(desc(issues.updatedAt));
@@ -675,6 +679,7 @@ export async function listIssues(user: User) {
 }
 
 export async function createIssue(user: User, input: { title: string; description?: string; departmentId: number; category: string; priority: "critical" | "high" | "medium" | "low"; dueAt?: Date }) {
+  ensureManager(user);
   const db = await requireDb();
   const created = await db.insert(issues).values({ code: `ISS-${String(Date.now()).slice(-6)}`, title: input.title, description: input.description ?? null, departmentId: input.departmentId, category: input.category, priority: input.priority, reportedBy: user.id, dueAt: input.dueAt ?? null }).$returningId();
   await db.insert(notifications).values({ departmentId: input.departmentId, type: "issue", title: "New issue reported", body: input.title, entityType: "issue", entityId: created[0]!.id });
@@ -747,6 +752,7 @@ export async function updateManagementAction(user: User, input: { actionId: numb
 }
 
 export async function getIssueHistory(user: User, issueId: number) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const issue = (await db.select().from(issues).where(eq(issues.id, issueId)).limit(1))[0];
@@ -759,6 +765,7 @@ export async function getIssueHistory(user: User, issueId: number) {
 }
 
 export async function getOperationsModules(user: User) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const [departmentRows, equipmentRows, inventoryRows, expiryRows, rosterRows, handovers, auditRows, staffRows] = await Promise.all([
@@ -775,6 +782,7 @@ export async function getOperationsModules(user: User) {
 }
 
 export async function createHandover(user: User, input: { departmentId: number; shift: string; pendingTasks?: string; equipmentProblems?: string; stockShortages?: string; incidents?: string; operationalNotes?: string }) {
+  ensureManager(user);
   const db = await requireDb();
   const created = await db.insert(shiftHandovers).values({ ...input, fromUserId: user.id, handoverDate: new Date(dateKey()), pendingTasks: input.pendingTasks ?? null, equipmentProblems: input.equipmentProblems ?? null, stockShortages: input.stockShortages ?? null, incidents: input.incidents ?? null, operationalNotes: input.operationalNotes ?? null }).$returningId();
   await writeAudit(user.id, "shift_handover_created", "shift_handover", created[0]!.id);
@@ -921,7 +929,10 @@ export async function createOperationalFollowUpTask(user: User, input: { sourceT
     priority = item.criticality === "critical" || item.status === "out_of_service" ? "critical" : "high";
   }
   const dueTime = `${String(dueAt.getHours()).padStart(2, "0")}:${String(dueAt.getMinutes()).padStart(2, "0")}`;
-  const taskId = (await db.insert(tasks).values({ name: taskName, departmentId, frequency: "one_time", dueTime, priority, category, instructions: `Manager-confirmed follow-up created from ${input.sourceType} record #${input.sourceId}.`, active: true, createdBy: user.id, lastModifiedBy: user.id }).$returningId())[0]!.id;
+  const sourceMarker = `Manager-confirmed follow-up created from ${input.sourceType} record #${input.sourceId}.`;
+  const existingOpenFollowUp = (await db.select({ assignmentId: taskAssignments.id }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).where(and(eq(tasks.instructions, sourceMarker), notInArray(taskAssignments.status, ["completed", "pending_approval"]))).limit(1))[0];
+  if (existingOpenFollowUp) throw new TRPCError({ code: "CONFLICT", message: "An open follow-up task already exists for this operational record." });
+  const taskId = (await db.insert(tasks).values({ name: taskName, departmentId, frequency: "one_time", dueTime, priority, category, instructions: sourceMarker, active: true, createdBy: user.id, lastModifiedBy: user.id }).$returningId())[0]!.id;
   const assignmentId = (await db.insert(taskAssignments).values({ taskId, departmentId, dueAt, status: "not_started" }).$returningId())[0]!.id;
   await writeAudit(user.id, "operational_follow_up_task_created", "task_assignment", assignmentId, { ...input, taskId });
   return { taskId, assignmentId };
@@ -941,6 +952,7 @@ export async function updateDutyAttendance(user: User, input: { rosterId: number
 type RosterEntryInput = { departmentId: number; userId: number; dutyDate: Date; shift: string; startTime: string; endTime: string; assignedDuty: string; attendance?: "present" | "absent" | "late" | "leave" | "replacement"; notes?: string };
 
 async function validateRosterEntry(db: Awaited<ReturnType<typeof requireDb>>, input: RosterEntryInput) {
+  if (input.startTime >= input.endTime) throw new TRPCError({ code: "BAD_REQUEST", message: "Roster start time must be earlier than the end time." });
   const staffMember = (await db.select({ user: users, profile: staffProfiles }).from(users).innerJoin(staffProfiles, eq(staffProfiles.userId, users.id)).where(eq(users.id, input.userId)).limit(1))[0];
   if (!staffMember?.profile.active) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose an active staff member for this roster entry." });
   if (staffMember.profile.departmentId !== input.departmentId) throw new TRPCError({ code: "BAD_REQUEST", message: "The selected staff member must belong to the selected department." });
@@ -1021,6 +1033,7 @@ export async function updateOperationalAlert(user: User, input: { notificationId
 }
 
 export async function getCalendar(user: User) {
+  ensureManager(user);
   await ensureOperationalDemo(user);
   const db = await requireDb();
   const [assignmentRows, maintenanceRows, expiryRows, rosterRows, riskRows, actionRows] = await Promise.all([
@@ -1082,7 +1095,7 @@ export async function runOperationalCycle() {
     const [hour, minute] = row.task.dueTime.split(":").map(Number);
     const dueAt = new Date(row.recurring.nextRunAt);
     dueAt.setHours(hour ?? 0, minute ?? 0, 0, 0);
-    await db.insert(taskAssignments).values({ taskId: row.task.id, departmentId: row.task.departmentId, assignedUserId: row.task.assignedUserId, dueAt });
+    await db.insert(taskAssignments).values({ taskId: row.task.id, departmentId: row.task.departmentId, assignedUserId: row.task.assignedUserId, dueAt }).onDuplicateKeyUpdate({ set: { dueAt } });
     await db.update(recurringTasks).set({ lastGeneratedFor: today, nextRunAt: computeNextDueDate(row.task.frequency, dueAt) }).where(eq(recurringTasks.id, row.recurring.id));
     generatedAssignments += 1;
   }

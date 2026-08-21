@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { acknowledgeWhatsAppTask, completeTask, completeTaskDirectlyByManager, createDutyRoster, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getOperationalAlerts, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, importDutyRosters, isAdmin, isManager, prepareWhatsAppTask, recordWhatsAppTaskOutcome, reviewWhatsAppTask, runOperationalCycle, saveChecklistResult, updateManagementAction, updateOperationalAlert, updateRisk, updateTaskScoringRule } from "./operationsData";
+import { acknowledgeWhatsAppTask, completeTask, completeTaskDirectlyByManager, createDutyRoster, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getCalendar, getDashboard, getManagementActions, getMyDay, getOperationalAlerts, getOperationsModules, getReports, getRiskRegister, getTaskDetail, getTaskScoringRules, getWhatsAppTaskRegister, importDutyRosters, isAdmin, isManager, listIssues, prepareWhatsAppTask, recordWhatsAppTaskOutcome, reviewWhatsAppTask, runOperationalCycle, saveChecklistResult, updateManagementAction, updateOperationalAlert, updateRisk, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -84,7 +84,7 @@ describe("operational backend mutations", () => {
     ]);
     state.db = fake.db;
 
-    const result = await saveChecklistResult(actor, { assignmentId: 77, checklistId: 12, status: "damaged", note: "Seam split found during opening check." });
+    const result = await saveChecklistResult(supervisor, { assignmentId: 77, checklistId: 12, status: "damaged", note: "Seam split found during opening check." });
 
     expect(result).toEqual({ issueId: 501, createdIssue: true });
     expect(fake.writes.some(write => (write.payload as any)?.title?.includes("Lead apron undamaged"))).toBe(true);
@@ -102,18 +102,18 @@ describe("operational backend mutations", () => {
     ]);
     state.db = fake.db;
 
-    await expect(completeTask(actor, { assignmentId: 77 })).rejects.toMatchObject({ message: expect.stringMatching(/required checklist items/i) });
+    await expect(completeTask(supervisor, { assignmentId: 77 })).rejects.toMatchObject({ message: expect.stringMatching(/required checklist items/i) });
   });
 
   it("changes an overdue assignment to completed after its required checklist is recorded and submitted", async () => {
     const overdueDetail = { ...detail, assignment: { ...detail.assignment, status: "overdue", dueAt: new Date("2026-08-20T08:00:00.000Z") }, task: { ...detail.task, evidenceRequired: false, approvalRequired: false } };
     const recordedResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };
     const fake = makeDb([
-      [{ value: 1 }], [{ value: 1 }], [overdueDetail], [requiredChecklist], [recordedResult],
+      [{ value: 1 }], [{ value: 1 }], [overdueDetail], [requiredChecklist], [recordedResult], [],
     ]);
     state.db = fake.db;
 
-    await expect(completeTask(actor, { assignmentId: 77, notes: "All checks completed." })).resolves.toEqual({ status: "completed" });
+    await expect(completeTask(supervisor, { assignmentId: 77, notes: "All checks completed." })).resolves.toEqual({ status: "completed" });
     expect(fake.writes.some(write => write.kind === "update" && (write.payload as any)?.status === "completed" && (write.payload as any)?.completedAt instanceof Date)).toBe(true);
   });
 
@@ -123,13 +123,13 @@ describe("operational backend mutations", () => {
     const secondChecklist = { ...requiredChecklist, id: 13, taskId: 6, label: "Barrier is intact" };
     const secondResult = { id: 19, assignmentId: 78, checklistId: 13, status: "available" };
     const fake = makeDb([
-      [{ value: 1 }], [{ value: 1 }], [detail], [requiredChecklist], [firstResult],
-      [{ value: 1 }], [{ value: 1 }], [secondDetail], [secondChecklist], [secondResult],
+      [{ value: 1 }], [{ value: 1 }], [detail], [requiredChecklist], [firstResult], [],
+      [{ value: 1 }], [{ value: 1 }], [secondDetail], [secondChecklist], [secondResult], [],
     ]);
     state.db = fake.db;
 
-    await expect(completeTask(actor, { assignmentId: 77 })).resolves.toEqual({ status: "completed" });
-    await expect(completeTask(actor, { assignmentId: 78 })).resolves.toEqual({ status: "completed" });
+    await expect(completeTask(supervisor, { assignmentId: 77 })).resolves.toEqual({ status: "completed" });
+    await expect(completeTask(supervisor, { assignmentId: 78 })).resolves.toEqual({ status: "completed" });
 
     const completionWrites = fake.writes.filter(write => write.kind === "update" && (write.payload as any)?.status === "completed");
     expect(completionWrites).toHaveLength(2);
@@ -152,24 +152,24 @@ describe("operational backend mutations", () => {
       { assignment: secondDetail.assignment, task: secondDetail.task, departmentName: "Radiology" },
     ];
     const afterSecondCompletion = afterFirstCompletion.map(row => row.assignment.id === 78 ? { ...row, assignment: { ...row.assignment, status: "completed", completedAt: new Date() } } : row);
-    const profile = { userId: actor.id, departmentId: 4, active: true };
+    const profile = { userId: supervisor.id, departmentId: 4, active: true };
     const fake = makeDb([
       [{ value: 1 }], [{ value: 1 }], [profile], beforeCompletion,
-      [{ value: 1 }], [{ value: 1 }], [firstDetail], [requiredChecklist], [firstResult],
+      [{ value: 1 }], [{ value: 1 }], [firstDetail], [requiredChecklist], [firstResult], [],
       [{ value: 1 }], [{ value: 1 }], [profile], afterFirstCompletion,
-      [{ value: 1 }], [{ value: 1 }], [secondDetail], [secondChecklist], [secondResult],
+      [{ value: 1 }], [{ value: 1 }], [secondDetail], [secondChecklist], [secondResult], [],
       [{ value: 1 }], [{ value: 1 }], [profile], afterSecondCompletion,
     ]);
     state.db = fake.db;
 
-    expect((await getMyDay(actor)).counts.completed).toBe(0);
-    await expect(completeTask(actor, { assignmentId: 77 })).resolves.toEqual({ status: "completed" });
-    const afterFirstRefresh = await getMyDay(actor);
+    expect((await getMyDay(supervisor)).counts.completed).toBe(0);
+    await expect(completeTask(supervisor, { assignmentId: 77 })).resolves.toEqual({ status: "completed" });
+    const afterFirstRefresh = await getMyDay(supervisor);
     expect(afterFirstRefresh.counts.completed).toBe(1);
     expect(afterFirstRefresh.tasks.find(row => row.assignment.id === 78)?.effectiveStatus).toBe("in_progress");
 
-    await expect(completeTask(actor, { assignmentId: 78 })).resolves.toEqual({ status: "completed" });
-    const afterSecondRefresh = await getMyDay(actor);
+    await expect(completeTask(supervisor, { assignmentId: 78 })).resolves.toEqual({ status: "completed" });
+    const afterSecondRefresh = await getMyDay(supervisor);
     expect(afterSecondRefresh.counts.completed).toBe(2);
     expect(afterSecondRefresh.counts.pending).toBe(0);
     expect(fake.writes.some(write => (write.payload as any)?.assignmentId === 78 && (write.payload as any)?.evidenceUrl === null)).toBe(true);
@@ -180,13 +180,13 @@ describe("operational backend mutations", () => {
     const recordedResult = { id: 18, assignmentId: 77, checklistId: 12, status: "available" };
     const refreshedMyDayRow = { assignment: { ...overdueDetail.assignment, status: "completed", completedAt: new Date() }, task: overdueDetail.task, departmentName: "Radiology" };
     const fake = makeDb([
-      [{ value: 1 }], [{ value: 1 }], [overdueDetail], [requiredChecklist], [recordedResult],
-      [{ value: 1 }], [{ value: 1 }], [{ userId: actor.id, departmentId: 4, active: true }], [refreshedMyDayRow],
+      [{ value: 1 }], [{ value: 1 }], [overdueDetail], [requiredChecklist], [recordedResult], [],
+      [{ value: 1 }], [{ value: 1 }], [{ userId: supervisor.id, departmentId: 4, active: true }], [refreshedMyDayRow],
     ]);
     state.db = fake.db;
 
-    await completeTask(actor, { assignmentId: 77 });
-    const refreshed = await getMyDay(actor);
+    await completeTask(supervisor, { assignmentId: 77 });
+    const refreshed = await getMyDay(supervisor);
 
     expect(refreshed.tasks).toHaveLength(1);
     expect(refreshed.tasks[0]).toMatchObject({ assignment: { id: 77, status: "completed" }, effectiveStatus: "completed" });
@@ -474,6 +474,11 @@ describe("operational backend mutations", () => {
     await expect(createDutyRoster(supervisor, rosterInput)).resolves.toEqual({ id: 501 });
     expect(createdFake.writes.some(write => (write.payload as any)?.assignedDuty === "Imaging coverage")).toBe(true);
 
+    const invalidTimeFake = makeDb([]);
+    state.db = invalidTimeFake.db;
+    await expect(createDutyRoster(supervisor, { ...rosterInput, startTime: "16:00", endTime: "08:00" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/start time/i) });
+    expect(invalidTimeFake.writes).toEqual([]);
+
     const duplicateFake = makeDb([[{ user: actor, profile: { userId: 7, departmentId: 4, active: true } }], [{ id: 88 }]]);
     state.db = duplicateFake.db;
     await expect(createDutyRoster(supervisor, rosterInput)).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringMatching(/matching roster slot/i) });
@@ -536,6 +541,17 @@ describe("operational backend mutations", () => {
     expect(fake.writes).toEqual([]);
   });
 
+  it("prevents a second open follow-up task for the same operational source record", async () => {
+    const fake = makeDb([
+      [{ id: 11, name: "Emergency Defibrillator", departmentId: 4, criticality: "high", status: "under_maintenance" }],
+      [{ assignmentId: 701 }],
+    ]);
+    state.db = fake.db;
+
+    await expect(createOperationalFollowUpTask(supervisor, { sourceType: "equipment", sourceId: 11 })).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringMatching(/open follow-up/i) });
+    expect(fake.writes).toEqual([]);
+  });
+
   it("denies staff users from reading or updating Version 2 management controls", async () => {
     const fake = makeDb([]);
     state.db = fake.db;
@@ -578,6 +594,26 @@ describe("operational backend mutations", () => {
     await expect(getTaskScoringRules(viewer)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("denies staff and viewer roles from manager workspace data contracts even through direct procedure calls", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(getDashboard(actor)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(getOperationsModules(actor)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(getCalendar(actor)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(listIssues(viewer)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("denies retired staff access to My Day, checklist, and legacy completion procedures", async () => {
+    const fake = makeDb([]);
+    state.db = fake.db;
+    await expect(getMyDay(actor)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(getTaskDetail(actor, 77)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(saveChecklistResult(actor, { assignmentId: 77, checklistId: 12, status: "available" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(completeTask(actor, { assignmentId: 77 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(fake.writes).toEqual([]);
+  });
+
   it("keeps a pre-Version-2 sent WhatsApp dispatch visible in the manager register", async () => {
     const now = new Date();
     const legacyDispatch = { id: 90, assignmentId: 77, status: "sent", sentAt: now, penaltyApplied: false };
@@ -611,7 +647,7 @@ describe("operational backend mutations", () => {
     ]);
     state.db = fake.db;
 
-    const myDay = await getMyDay(actor);
+    const myDay = await getMyDay(supervisor);
 
     expect(myDay.counts).toEqual({ total: 1, overdue: 0, completed: 0, pending: 1 });
     expect(myDay.tasks).toEqual([expect.objectContaining({ assignment: expect.objectContaining({ id: 41, status: "in_progress" }), task: expect.objectContaining({ name: "Legacy radiation room readiness check" }), effectiveStatus: "in_progress" })]);
@@ -633,7 +669,7 @@ describe("operational backend mutations", () => {
       state.db = fake.db;
 
       const cycle = await runOperationalCycle();
-      const day = await getMyDay(actor);
+      const day = await getMyDay(supervisor);
 
       expect(cycle.generatedAssignments).toBe(1);
       expect(fake.writes.some(write => (write.payload as any)?.dueAt?.toISOString() === "2026-08-21T09:00:00.000Z")).toBe(true);

@@ -1,0 +1,1 @@
+ALTER TABLE `taskAssignments` ADD CONSTRAINT `assignment_task_due_unique` UNIQUE(`taskId`,`dueAt`);
