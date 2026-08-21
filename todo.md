@@ -83,3 +83,7 @@
 - [x] Expand reports, response-time analytics, repeated-problem analysis, trends, search, notification center, and calendar filters.
 - [x] Add comprehensive regression, permission, data-preservation, and responsive validation for the Version 2 workflow.
 - [x] Prepare the required Version 2 implementation summary after validation.
+- [x] Allow the operations manager to complete selected department-related tasks directly without WhatsApp group distribution.
+- [x] Add direct-completion workflow and permission regression coverage for manager-owned tasks.
+- [x] Verify direct manager completion on desktop and mobile, then publish the update.
+- [x] Save and publish the verified direct manager-completion update.

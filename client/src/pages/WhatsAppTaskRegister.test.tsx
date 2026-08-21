@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   acknowledgementInputs: [] as any[],
   reviewInputs: [] as any[],
   outcomeInputs: [] as any[],
+  directCompletionInputs: [] as any[],
   invalidations: [] as string[],
 }));
 
@@ -25,8 +26,9 @@ vi.mock("@/lib/trpc", () => ({
       whatsappTaskAcknowledge: { useMutation: (options: any) => ({ isPending: false, mutate: (input: any) => { state.acknowledgementInputs.push(input); options.onSuccess({ status: "acknowledged" }); } }) },
       whatsappTaskReview: { useMutation: (options: any) => ({ isPending: false, mutate: (input: any) => { state.reviewInputs.push(input); options.onSuccess({ status: input.close ? "closed" : "reviewed" }); } }) },
       whatsappTaskOutcome: { useMutation: (options: any) => ({ isPending: false, mutate: (input: any) => { state.outcomeInputs.push(input); options.onSuccess({ status: input.outcome, penaltyApplied: false }); } }) },
+      taskManagerDirectComplete: { useMutation: (options: any) => ({ isPending: false, mutate: (input: any) => { state.directCompletionInputs.push(input); options.onSuccess({ status: "completed", alreadyCompleted: false }); } }) },
     },
-    useUtils: () => ({ operations: { whatsappTaskRegister: { invalidate: () => state.invalidations.push("register") }, dashboard: { invalidate: () => state.invalidations.push("dashboard") } } }),
+    useUtils: () => ({ operations: { whatsappTaskRegister: { invalidate: () => state.invalidations.push("register") }, dashboard: { invalidate: () => state.invalidations.push("dashboard") }, reports: { invalidate: () => state.invalidations.push("reports") } } }),
   },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -64,6 +66,7 @@ describe("WhatsAppTaskRegister manager workflow", () => {
     state.acknowledgementInputs = [];
     state.reviewInputs = [];
     state.outcomeInputs = [];
+    state.directCompletionInputs = [];
     state.invalidations = [];
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -107,6 +110,19 @@ describe("WhatsAppTaskRegister manager workflow", () => {
 
     expect(state.outcomeInputs).toEqual([{ dispatchId: 501, outcome: "completed", note: undefined, excusedReason: undefined }]);
     expect(state.invalidations).toEqual(expect.arrayContaining(["register", "dashboard"]));
+  });
+
+  it("records a task performed directly by the operations manager without preparing a WhatsApp message", () => {
+    act(() => root.render(<WhatsAppTaskRegister />));
+    const directButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Complete myself")) as HTMLButtonElement;
+    act(() => directButton.click());
+    const confirmButton = Array.from(document.querySelectorAll("button")).find(button => button.textContent === "Confirm manager completion") as HTMLButtonElement;
+    act(() => confirmButton.click());
+
+    expect(state.directCompletionInputs).toEqual([{ assignmentId: 77, notes: undefined }]);
+    expect(state.prepareInputs).toEqual([]);
+    expect(state.dispatchInputs).toEqual([]);
+    expect(state.invalidations).toEqual(expect.arrayContaining(["register", "dashboard", "reports"]));
   });
 
   it("labels daily, weekly, and monthly WhatsApp tasks by cadence", () => {

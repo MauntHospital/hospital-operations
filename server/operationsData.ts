@@ -607,6 +607,21 @@ export async function completeTask(user: User, input: { assignmentId: number; no
   return { status: finalStatus };
 }
 
+export async function completeTaskDirectlyByManager(user: User, input: { assignmentId: number; notes?: string }) {
+  ensureManager(user);
+  const db = await requireDb();
+  const detail = await getTaskDetail(user, input.assignmentId);
+  const dispatch = (await db.select().from(whatsappTaskDispatches).where(eq(whatsappTaskDispatches.assignmentId, input.assignmentId)).limit(1))[0];
+  if (dispatch) throw new TRPCError({ code: "BAD_REQUEST", message: "This task is already in the WhatsApp workflow. Record its outcome through the task lifecycle instead." });
+  if (detail.assignment.status === "completed") return { status: "completed" as const, alreadyCompleted: true };
+
+  const notes = input.notes?.trim() || "Completed directly by the operations manager; no WhatsApp distribution required.";
+  await db.update(taskAssignments).set({ status: "completed", completedAt: new Date() }).where(eq(taskAssignments.id, input.assignmentId));
+  await db.insert(taskCompletions).values({ assignmentId: input.assignmentId, taskId: detail.task.id, userId: user.id, departmentId: detail.department.id, status: "completed", notes, evidenceUrl: null, approvalStatus: "not_required" }).onDuplicateKeyUpdate({ set: { status: "completed", notes, evidenceUrl: null, completedAt: new Date() } });
+  await writeAudit(user.id, "task_completed_directly_by_manager", "task_assignment", input.assignmentId, { directManagerCompletion: true, whatsappDistributed: false });
+  return { status: "completed" as const, alreadyCompleted: false };
+}
+
 export async function createTask(user: User, input: { name: string; description?: string; departmentId: number; assignedUserId?: number; frequency: "one_time" | "daily" | "every_shift" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"; dueTime: string; priority: "critical" | "high" | "medium" | "low"; category: string; instructions?: string; approvalRequired?: boolean; weeklyDay?: "saturday" | "sunday"; checklist: string[] }) {
   ensureSuperAdmin(user);
   const db = await requireDb();

@@ -7,7 +7,7 @@ vi.mock("./db", () => ({
   getDb: async () => state.db,
 }));
 
-import { completeTask, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, isAdmin, isManager, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
+import { completeTask, completeTaskDirectlyByManager, createManagementAction, createOperationalFollowUpTask, createRisk, createTask, dispatchWhatsAppTask, getDashboard, getManagementActions, getMyDay, getReports, getRiskRegister, getTaskScoringRules, getWhatsAppTaskRegister, isAdmin, isManager, recordWhatsAppTaskOutcome, runOperationalCycle, saveChecklistResult, updateManagementAction, updateRisk, updateTaskScoringRule } from "./operationsData";
 
 function query(rows: any[]) {
   const chain: any = {
@@ -218,6 +218,34 @@ describe("operational backend mutations", () => {
     const result = await dispatchWhatsAppTask(admin, { assignmentId: 77 });
 
     expect(result.messageText).toMatch(/Weekly task/);
+  });
+
+  it("lets an operations manager complete a department task directly without creating a WhatsApp dispatch or score event", async () => {
+    const directDetail = { ...detail, assignment: { ...detail.assignment, status: "in_progress" }, task: { ...detail.task, approvalRequired: true } };
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [directDetail], [], [], [],
+    ]);
+    state.db = fake.db;
+
+    await expect(completeTaskDirectlyByManager(admin, { assignmentId: 77, notes: "Completed during the morning operations round." })).resolves.toEqual({ status: "completed", alreadyCompleted: false });
+
+    expect(fake.writes.some(write => write.kind === "update" && (write.payload as any)?.status === "completed" && (write.payload as any)?.completedAt instanceof Date)).toBe(true);
+    expect(fake.writes.some(write => (write.payload as any)?.assignmentId === 77 && (write.payload as any)?.approvalStatus === "not_required")).toBe(true);
+    expect(fake.writes.some(write => (write.payload as any)?.departmentId === 4 && (write.payload as any)?.channel !== undefined)).toBe(false);
+    expect(fake.writes.some(write => (write.payload as any)?.pointDelta !== undefined)).toBe(false);
+  });
+
+  it("does not allow staff or already-dispatched work to bypass the WhatsApp accountability lifecycle", async () => {
+    const deniedFake = makeDb([]);
+    state.db = deniedFake.db;
+    await expect(completeTaskDirectlyByManager(actor, { assignmentId: 77 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(deniedFake.writes).toEqual([]);
+
+    const dispatchedFake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [detail], [], [], [{ id: 501, assignmentId: 77, status: "sent" }],
+    ]);
+    state.db = dispatchedFake.db;
+    await expect(completeTaskDirectlyByManager(admin, { assignmentId: 77 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/WhatsApp workflow/i) });
   });
 
   it("applies the configured weighted deduction exactly once when an end-of-day WhatsApp task stays pending or receives no reply", async () => {
