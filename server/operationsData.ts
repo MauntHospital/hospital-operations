@@ -277,7 +277,7 @@ export async function getDashboard(user: User) {
   await ensureVersion2Defaults();
   const db = await requireDb();
   const [assignmentRows, issueRows, equipmentRows, inventoryRows, expiryRows, departmentRows, notificationRows, dispatchRows, pointRows, riskRows, managementActionRows, handoverRows, staffingTargetRows, rosterRows, indicatorRules] = await Promise.all([
-    db.select({ id: taskAssignments.id, status: taskAssignments.status, dueAt: taskAssignments.dueAt, taskName: tasks.name, priority: tasks.priority, departmentId: departments.id, departmentName: departments.name, assignedUserId: taskAssignments.assignedUserId }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)),
+    db.select({ id: taskAssignments.id, status: taskAssignments.status, dueAt: taskAssignments.dueAt, taskName: tasks.name, priority: tasks.priority, frequency: tasks.frequency, departmentId: departments.id, departmentName: departments.name, assignedUserId: taskAssignments.assignedUserId, whatsappStatus: whatsappTaskDispatches.status }).from(taskAssignments).innerJoin(tasks, eq(taskAssignments.taskId, tasks.id)).innerJoin(departments, eq(taskAssignments.departmentId, departments.id)).leftJoin(whatsappTaskDispatches, eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)),
     db.select().from(issues).orderBy(desc(issues.updatedAt)),
     db.select().from(equipment),
     db.select().from(inventory),
@@ -398,6 +398,7 @@ export async function getDashboard(user: User) {
     complianceSummary: { hospitalRate: totalDispatched ? Math.round((totalCompleted / totalDispatched) * 100) : 100, dispatched: totalDispatched, completed: totalCompleted },
     notifications: notificationRows,
     recentAssignments: activeAssignmentRows.slice(0, 6).map(row => ({ ...row, effectiveStatus: operationalAssignmentStatus(row.status, row.dueAt, now) })),
+    whatsappTodayAssignments: todayAssignmentRows.filter(row => ["daily", "weekly", "monthly"].includes(row.frequency)).map(row => ({ ...row, effectiveStatus: row.whatsappStatus ?? (row.status === "completed" ? "completed" : operationalAssignmentStatus(row.status, row.dueAt, now)), workflowStatus: row.whatsappStatus ?? (row.status === "completed" ? "manager_completed" : "not_distributed") })),
   };
 }
 
@@ -536,6 +537,7 @@ export async function recordWhatsAppTaskOutcome(user: User, input: { dispatchId:
   const shouldPenaltyApply = ["pending", "no_reply"].includes(input.outcome) && !dispatch.penaltyApplied;
   const now = new Date();
   await db.update(whatsappTaskDispatches).set({ status: input.outcome, respondedAt: now, responseNote: input.note?.trim() || null, excusedReason: input.outcome === "excused" ? input.excusedReason!.trim() : null, penaltyApplied: dispatch.penaltyApplied || shouldPenaltyApply }).where(eq(whatsappTaskDispatches.id, dispatch.id));
+  await db.update(taskAssignments).set({ status: ["completed", "excused"].includes(input.outcome) ? "completed" : "in_progress", completedAt: ["completed", "excused"].includes(input.outcome) ? now : null }).where(eq(taskAssignments.id, dispatch.assignmentId));
   let penaltyTenths = 0;
   if (shouldPenaltyApply) {
     const scoringRule = (await db.select().from(taskScoringRules).where(eq(taskScoringRules.priority, row.task.priority)).limit(1))[0];

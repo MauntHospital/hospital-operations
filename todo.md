@@ -100,3 +100,7 @@
 - [x] Align reporting navigation and access feedback with manager-only reporting permissions.
 - [x] Ensure the no-duty-coverage roster state remains fully readable without horizontal scrolling on mobile.
 - [x] Distinguish today’s scheduled work from unresolved carry-over in Control Tower task labels and counts.
+- [x] Diagnose and align the Control Tower operational task queue with the WhatsApp task register’s current-day workflow.
+- [x] Add regression coverage proving both manager views use consistent task counts and lifecycle status scope.
+- [x] Verify the synchronized Control Tower and WhatsApp register on desktop and mobile, then publish the correction.
+- [x] Backfill assignment status from existing WhatsApp outcomes so prior closed dispatches no longer appear as overdue Control Tower work.

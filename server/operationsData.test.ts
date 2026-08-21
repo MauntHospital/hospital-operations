@@ -256,12 +256,23 @@ describe("operational backend mutations", () => {
 
     await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "no_reply", note: "No WhatsApp reply by close of shift." })).resolves.toEqual({ status: "no_reply", penaltyApplied: true, penaltyTenths: 30 });
     expect(penaltyFake.writes.some(write => (write.payload as any)?.pointDelta === -30 && (write.payload as any)?.dispatchId === 501)).toBe(true);
+    expect(penaltyFake.writes.some(write => (write.payload as any)?.status === "in_progress" && (write.payload as any)?.completedAt === null)).toBe(true);
 
     const penalizedDispatch = { ...initialDispatch, status: "no_reply", penaltyApplied: true };
     const noDuplicateFake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ dispatch: penalizedDispatch, task: scoredTask }]]);
     state.db = noDuplicateFake.db;
     await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "pending" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/already has a recorded outcome/i) });
     expect(noDuplicateFake.writes.some(write => (write.payload as any)?.pointDelta === -30)).toBe(false);
+  });
+
+  it("marks the underlying assignment complete when a WhatsApp outcome is completed or excused", async () => {
+    const completedDispatch = { id: 501, assignmentId: 77, departmentId: 4, status: "sent", penaltyApplied: false };
+    const completedFake = makeDb([[{ value: 1 }], [{ value: 1 }], [{ dispatch: completedDispatch, task: { id: 5, priority: "high", pointWeightTenths: 10 } }]]);
+    state.db = completedFake.db;
+
+    await expect(recordWhatsAppTaskOutcome(admin, { dispatchId: 501, outcome: "completed" })).resolves.toMatchObject({ status: "completed", penaltyApplied: false });
+
+    expect(completedFake.writes.filter(write => (write.payload as any)?.status === "completed")).toHaveLength(2);
   });
 
   it("preserves terminal WhatsApp and direct-completion states instead of reopening them through another lifecycle action", async () => {
@@ -336,6 +347,57 @@ describe("operational backend mutations", () => {
     expect(dashboard.taskCounts).toMatchObject({ total: 2, scheduledToday: 1, completed: 1, overdue: 1 });
     expect(dashboard.departmentHealth).toEqual([expect.objectContaining({ id: 4, total: 2, completed: 1, overdue: 1 })]);
     expect(dashboard.recentAssignments.map(row => row.id)).toEqual([77, 79]);
+  });
+
+  it("uses the same current-day daily, weekly, and monthly assignments in Control Tower as the WhatsApp task register", async () => {
+    const now = new Date();
+    const currentDueAt = new Date(now.getTime() + 60 * 60_000);
+    const priorDay = new Date(now.getTime() - 24 * 60 * 60_000);
+    const fake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }],
+      [
+        { id: 77, status: "completed", dueAt: currentDueAt, taskName: "Daily safety check", priority: "medium", frequency: "daily", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id, whatsappStatus: "closed" },
+        { id: 78, status: "not_started", dueAt: currentDueAt, taskName: "Weekly stock count", priority: "high", frequency: "weekly", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id, whatsappStatus: "sent" },
+        { id: 79, status: "not_started", dueAt: currentDueAt, taskName: "Shift equipment check", priority: "high", frequency: "every_shift", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id, whatsappStatus: null },
+        { id: 80, status: "overdue", dueAt: priorDay, taskName: "Prior daily carry-over", priority: "high", frequency: "daily", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id, whatsappStatus: "pending" },
+      ],
+      [], [], [], [], [{ id: 4, name: "Radiology", active: true }], [], [], [], [], [], [], [], [], [],
+    ]);
+    state.db = fake.db;
+
+    const dashboard = await getDashboard(admin);
+
+    expect(dashboard.whatsappTodayAssignments).toEqual([
+      expect.objectContaining({ id: 77, frequency: "daily", workflowStatus: "closed", effectiveStatus: "closed" }),
+      expect.objectContaining({ id: 78, frequency: "weekly", workflowStatus: "sent", effectiveStatus: "sent" }),
+    ]);
+  });
+
+  it("keeps Control Tower task totals and lifecycle labels in parity with the WhatsApp register for the same current-day work", async () => {
+    const now = new Date();
+    const currentDueAt = new Date(now.getTime() + 60 * 60_000);
+    const dashboardAssignments = [
+      { id: 77, status: "completed", dueAt: currentDueAt, taskName: "Daily safety check", priority: "medium", frequency: "daily", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id, whatsappStatus: "closed" },
+      { id: 78, status: "in_progress", dueAt: currentDueAt, taskName: "Weekly stock count", priority: "high", frequency: "weekly", departmentId: 4, departmentName: "Radiology", assignedUserId: actor.id, whatsappStatus: "pending" },
+    ];
+    const registerRows = dashboardAssignments.map(row => ({ assignment: { id: row.id, status: row.status, dueAt: row.dueAt }, task: { id: row.id, name: row.taskName, priority: row.priority, frequency: row.frequency }, department: { id: row.departmentId, name: row.departmentName }, dispatch: { id: row.id + 500, assignmentId: row.id, status: row.whatsappStatus } }));
+
+    const dashboardFake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], dashboardAssignments,
+      [], [], [], [], [{ id: 4, name: "Radiology", active: true }], [], registerRows.map(row => ({ id: row.dispatch.id, assignmentId: row.assignment.id, departmentId: 4, status: row.dispatch.status })), [], [], [], [], [], [], [], [],
+    ]);
+    state.db = dashboardFake.db;
+    const dashboard = await getDashboard(admin);
+
+    const registerFake = makeDb([
+      [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], [{ value: 1 }], registerRows,
+      [], [], [{ id: 4, name: "Radiology", active: true }],
+    ]);
+    state.db = registerFake.db;
+    const register = await getWhatsAppTaskRegister(admin);
+
+    expect(dashboard.whatsappTodayAssignments).toHaveLength(register.tasks.length);
+    expect(dashboard.whatsappTodayAssignments.map(row => [row.id, row.workflowStatus])).toEqual(register.tasks.map(row => [row.assignment.id, row.dispatch?.status]));
   });
 
   it("reports the complete Version 2 accountability workflow with response times, risks, overdue actions, and repeated-problem trends", async () => {
