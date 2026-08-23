@@ -976,7 +976,7 @@ export async function getDashboard(user: User) {
     pointRows,
     riskRows,
     managementActionRows,
-    handoverRows,
+    historicalHandoverRows,
     staffingTargetRows,
     rosterRows,
     indicatorRules,
@@ -1030,6 +1030,7 @@ export async function getDashboard(user: User) {
       .from(operationalIndicatorRules)
       .where(eq(operationalIndicatorRules.active, true)),
   ]);
+  void historicalHandoverRows;
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const tomorrowStart = new Date(todayStart);
@@ -1197,15 +1198,6 @@ export async function getDashboard(user: User) {
       detail: "Management action overdue",
       route: "/management-actions",
     })),
-    ...handoverRows.map(handover => ({
-      key: `handover-${handover.id}`,
-      severity: "medium",
-      title: `${handover.shift} handover unresolved`,
-      departmentId: handover.departmentId,
-      owner: "Incoming shift",
-      detail: "Handover acknowledgement required",
-      route: "/handover",
-    })),
   ]
     .sort((a, b) => {
       const weights = { critical: 0, high: 1, medium: 2, low: 3 } as const;
@@ -1372,7 +1364,6 @@ export async function getDashboard(user: User) {
         0
       ),
     },
-    handoverCounts: { unresolved: handoverRows.length },
     managementActionCounts: {
       overdue: overdueManagementActions.length,
       open: managementActionRows.filter(

@@ -15,11 +15,8 @@ vi.mock("@/lib/trpc", () => ({
       modules: {
         useQuery: () => ({
           isLoading: false,
-          data: { rosters: [], handovers: [], departments: [], staff: [] },
+          data: { rosters: [], departments: [], staff: [] },
         }),
-      },
-      handoverCreate: {
-        useMutation: () => ({ isPending: false, mutate: vi.fn() }),
       },
       dutyAttendanceUpdate: {
         useMutation: () => ({ isPending: false, mutate: vi.fn() }),

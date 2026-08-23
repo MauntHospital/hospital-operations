@@ -6,6 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  WorkspaceError,
+  WorkspaceLoading,
+} from "@/components/WorkspaceFeedback";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import {
@@ -46,31 +50,23 @@ export default function ReportsInsights() {
         </CardContent>
       </Card>
     );
-  if (report.isError)
+  if (report.isLoading)
     return (
-      <Card className="mx-auto max-w-xl border-rose-200">
-        <CardContent className="p-6 text-center">
-          <AlertTriangle className="mx-auto h-8 w-8 text-rose-600" />
-          <h1 className="mt-3 text-xl font-semibold text-slate-900">
-            Operational Insights is unavailable
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">
-            The report could not be loaded. Refresh the page or verify your
-            manager access before trying again.
-          </p>
-        </CardContent>
-      </Card>
+      <WorkspaceLoading
+        title="Loading Operational Insights"
+        description="Calculating current operational performance and accountability measures."
+      />
     );
-  if (report.isLoading || !report.data)
+  if (report.isError || !report.data)
     return (
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div
-            className="h-36 animate-pulse rounded-2xl bg-slate-100"
-            key={index}
-          />
-        ))}
-      </div>
+      <WorkspaceError
+        title="Operational Insights unavailable"
+        description={
+          report.error?.message ||
+          "The report could not be loaded. Check your manager access and try again."
+        }
+        onRetry={() => report.refetch()}
+      />
     );
   const data = report.data;
   const acknowledgementTime =

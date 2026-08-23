@@ -85,7 +85,7 @@ function Router() {
         <AppShell view="roster" />
       </Route>
       <Route path={"/handover"}>
-        <AppShell view="handover" />
+        <Redirect to="/roster" replace />
       </Route>
       <Route path={"/reports"}>
         <DashboardLayout>

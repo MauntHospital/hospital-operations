@@ -1,6 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  WorkspaceError,
+  WorkspaceLoading,
+} from "@/components/WorkspaceFeedback";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -106,16 +110,27 @@ export default function RiskRegister() {
     },
     onError: error => toast.error(error.message),
   });
-  if (risks.isLoading || modules.isLoading || !risks.data || !modules.data)
+  if (risks.isLoading || modules.isLoading)
     return (
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[0, 1, 2].map(item => (
-          <div
-            className="h-28 animate-pulse rounded-2xl bg-slate-100"
-            key={item}
-          />
-        ))}
-      </div>
+      <WorkspaceLoading
+        title="Loading risk register"
+        description="Retrieving operational risks and department context."
+      />
+    );
+  if (risks.error || modules.error || !risks.data || !modules.data)
+    return (
+      <WorkspaceError
+        title="Risk register unavailable"
+        description={
+          risks.error?.message ||
+          modules.error?.message ||
+          "Operational risks could not be retrieved."
+        }
+        onRetry={() => {
+          risks.refetch();
+          modules.refetch();
+        }}
+      />
     );
   const openRisks = risks.data.filter(
     row => !["resolved", "closed"].includes(row.risk.status)

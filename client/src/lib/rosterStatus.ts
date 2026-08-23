@@ -23,26 +23,3 @@ export function getRosterAvailability(
     detail: `${staffName} is unavailable. A replacement may be required.`,
   };
 }
-
-export function getRosterHandover(
-  openHandover:
-    | {
-        shift: string;
-        pendingTasks?: string | null;
-        operationalNotes?: string | null;
-      }
-    | undefined,
-  departmentName: string
-) {
-  if (openHandover)
-    return {
-      label: "Follow-up",
-      tone: "warning" as RosterTone,
-      detail: `${openHandover.shift} handover has unresolved items: ${openHandover.pendingTasks || openHandover.operationalNotes || "review handover details"}.`,
-    };
-  return {
-    label: "Clear",
-    tone: "success" as RosterTone,
-    detail: `No unresolved handover items are recorded for ${departmentName}.`,
-  };
-}

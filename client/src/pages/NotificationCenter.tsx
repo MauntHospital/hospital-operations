@@ -5,6 +5,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  WorkspaceError,
+  WorkspaceLoading,
+} from "@/components/WorkspaceFeedback";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -17,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { Bell, CheckCircle2, RotateCcw, UserRoundCheck } from "lucide-react";
 import React, { useState } from "react";
+import { toast } from "sonner";
 
 export default function NotificationCenter() {
   const alerts = trpc.operations.operationalAlerts.useQuery();
@@ -25,20 +30,30 @@ export default function NotificationCenter() {
   const [statusFilter, setStatusFilter] = useState("open");
   const update = trpc.operations.operationalAlertUpdate.useMutation({
     onSuccess: () => {
+      toast.success("Alert handling updated.");
       utils.operations.operationalAlerts.invalidate();
       utils.operations.dashboard.invalidate();
     },
+    onError: error =>
+      toast.error(error.message || "The alert update could not be saved."),
   });
-  if (alerts.isLoading || !alerts.data)
+  if (alerts.isLoading)
     return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        {Array.from({ length: 4 }, (_, i) => (
-          <div
-            className="h-32 animate-pulse rounded-2xl bg-slate-100"
-            key={i}
-          />
-        ))}
-      </div>
+      <WorkspaceLoading
+        title="Loading operational alerts"
+        description="Retrieving current ownership and handling status."
+      />
+    );
+  if (alerts.error || !alerts.data)
+    return (
+      <WorkspaceError
+        title="Operational alerts unavailable"
+        description={
+          alerts.error?.message ||
+          "Alert ownership and handling status could not be retrieved."
+        }
+        onRetry={() => alerts.refetch()}
+      />
     );
   const statusStyle = (status: string) =>
     status === "resolved"
@@ -166,7 +181,7 @@ export default function NotificationCenter() {
                         }
                       >
                         <UserRoundCheck className="mr-1.5 h-3.5 w-3.5" />
-                        Acknowledge
+                        {update.isPending ? "Saving…" : "Acknowledge"}
                       </Button>
                     )}
                     {item.handlingStatus === "acknowledged" && (
@@ -183,7 +198,7 @@ export default function NotificationCenter() {
                         }
                       >
                         <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                        Resolve
+                        {update.isPending ? "Saving…" : "Resolve"}
                       </Button>
                     )}
                     {item.handlingStatus === "resolved" && (
@@ -200,7 +215,7 @@ export default function NotificationCenter() {
                         }
                       >
                         <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                        Reopen
+                        {update.isPending ? "Saving…" : "Reopen"}
                       </Button>
                     )}
                   </div>

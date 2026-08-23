@@ -2,6 +2,10 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  WorkspaceError,
+  WorkspaceLoading,
+} from "@/components/WorkspaceFeedback";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -45,7 +49,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { filterAndSortOperationalTasks } from "@/lib/taskQueue";
-import { getRosterAvailability, getRosterHandover } from "@/lib/rosterStatus";
+import { getRosterAvailability } from "@/lib/rosterStatus";
 import { groupMyDayTasks, type MyDayTaskGroup } from "@/lib/myDayGroups";
 import { trpc } from "@/lib/trpc";
 import {
@@ -290,16 +294,7 @@ function MetricCard({
 }
 
 function LoadingPanel() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {Array.from({ length: 4 }, (_, index) => (
-        <div
-          key={index}
-          className="h-32 animate-pulse rounded-2xl bg-slate-100"
-        />
-      ))}
-    </div>
-  );
+  return <WorkspaceLoading />;
 }
 
 function CommandCenterSummary({ data }: { data: any }) {
@@ -382,7 +377,7 @@ function CommandCenterSummary({ data }: { data: any }) {
           <MetricCard
             label="Overdue actions"
             value={data.managementActionCounts.overdue}
-            hint={`${data.handoverCounts.unresolved} unresolved handovers`}
+            hint="Management follow-up due"
             icon={AlertTriangle}
             tone="rose"
           />
@@ -456,6 +451,10 @@ function ControlTower() {
         utils.operations.whatsappTaskRegister.invalidate();
         utils.operations.reports.invalidate();
       },
+      onError: error =>
+        toast.error(
+          error.message || "The overdue task could not be completed."
+        ),
     }
   );
   const whatsappTodayAssignments =
@@ -469,7 +468,18 @@ function ControlTower() {
       }),
     [whatsappTodayAssignments, priorityFilter, statusFilter, sortBy]
   );
-  if (dashboard.isLoading || !dashboard.data) return <LoadingPanel />;
+  if (dashboard.isLoading) return <LoadingPanel />;
+  if (dashboard.error || !dashboard.data)
+    return (
+      <WorkspaceError
+        title="Control Tower unavailable"
+        description={
+          dashboard.error?.message ||
+          "The current operational summary could not be retrieved."
+        }
+        onRetry={() => dashboard.refetch()}
+      />
+    );
   const data = dashboard.data;
   const overall =
     data.operationalStatus === "critical"
@@ -2371,7 +2381,7 @@ function EquipmentAndInventory({ mode }: { mode: "equipment" | "inventory" }) {
   );
 }
 
-function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
+function Roster() {
   const modules = trpc.operations.modules.useQuery();
   const utils = trpc.useUtils();
   const { user } = useAuth();
@@ -2381,8 +2391,6 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
     "department_head",
     "supervisor",
   ].includes(user?.role ?? "staff");
-  const [shift, setShift] = useState("Day to Evening");
-  const [notes, setNotes] = useState("");
   const [rosterOpen, setRosterOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importErrors, setImportErrors] = useState<
@@ -2404,13 +2412,6 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
       | "replacement",
     notes: "",
   });
-  const handover = trpc.operations.handoverCreate.useMutation({
-    onSuccess: () => {
-      toast.success("Digital handover saved for the next shift.");
-      setNotes("");
-      utils.operations.modules.invalidate();
-    },
-  });
   const updateAttendance = trpc.operations.dutyAttendanceUpdate.useMutation({
     onSuccess: () => {
       toast.success(
@@ -2419,6 +2420,8 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
       utils.operations.modules.invalidate();
       utils.operations.dashboard.invalidate();
     },
+    onError: error =>
+      toast.error(error.message || "The attendance update could not be saved."),
   });
   const createRoster = trpc.operations.dutyRosterCreate.useMutation({
     onSuccess: () => {
@@ -2427,6 +2430,8 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
       utils.operations.modules.invalidate();
       utils.operations.dashboard.invalidate();
     },
+    onError: error =>
+      toast.error(error.message || "The roster entry could not be created."),
   });
   const importRoster = trpc.operations.dutyRosterImport.useMutation({
     onSuccess: result => {
@@ -2443,8 +2448,20 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
           `${result.errors.length} CSV ${result.errors.length === 1 ? "row needs" : "rows need"} attention.`
         );
     },
+    onError: error =>
+      toast.error(error.message || "The roster CSV could not be imported."),
   });
-  if (modules.isLoading || !modules.data) return <LoadingPanel />;
+  if (modules.isLoading) return <LoadingPanel />;
+  if (modules.error || !modules.data)
+    return (
+      <WorkspaceError
+        title="Duty roster unavailable"
+        description={
+          modules.error?.message || "The current roster could not be retrieved."
+        }
+        onRetry={() => modules.refetch()}
+      />
+    );
   const downloadRosterTemplate = () => {
     const content =
       "department,staff,duty_date,shift,start_time,end_time,assigned_duty,attendance,notes\nRadiology,Sample Staff,2026-08-22,Day,08:00,16:00,Imaging coverage,present,\n";
@@ -2777,13 +2794,13 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
       </Dialog>
     </div>
   ) : undefined;
-  if (mode === "roster" && modules.data.rosters.length === 0)
+  if (modules.data.rosters.length === 0)
     return (
       <>
         <PageHeading
           eyebrow="Workforce readiness"
           title="Duty roster and attendance"
-          description="See scheduled shift coverage, attendance exceptions, replacements, and handover continuity at a glance. Hover or focus an indicator for operational detail."
+          description="See scheduled shift coverage, attendance exceptions, and replacements at a glance. Hover or focus an indicator for operational detail."
           action={rosterActions}
         />
         <Card className="border-slate-200 shadow-sm">
@@ -2794,117 +2811,8 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
             </h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">
               Add or import the current shift roster to track attendance,
-              replacement needs, and handover coverage.
+              replacement needs, and attendance coverage.
             </p>
-          </CardContent>
-        </Card>
-      </>
-    );
-  if (mode === "roster")
-    return (
-      <>
-        <PageHeading
-          eyebrow="Workforce readiness"
-          title="Duty roster and attendance"
-          description="See scheduled shift coverage, attendance exceptions, replacements, and handover continuity at a glance. Hover or focus an indicator for operational detail."
-          action={rosterActions}
-        />
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-0">
-            <p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">
-              Swipe horizontally to review availability, handover status, and
-              attendance actions.
-            </p>
-            <div className="overflow-x-auto">
-              <Table className="min-w-[960px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Team member</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Shift</TableHead>
-                    <TableHead>Duty</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Availability</TableHead>
-                    <TableHead>Handover</TableHead>
-                    {canManage && (
-                      <TableHead className="text-right">Update</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {modules.data.rosters.map(row => {
-                    const staffName = row.staffName ?? "Unassigned staff";
-                    const departmentName =
-                      row.departmentName ?? "this department";
-                    const shiftName = row.roster.shift ?? "Unspecified shift";
-                    const openHandover = modules.data.handovers.find(
-                      handover =>
-                        handover.departmentName === row.departmentName &&
-                        handover.handover.unresolved
-                    );
-                    const attendance = row.roster.attendance ?? "absent";
-                    const availability = getRosterAvailability(
-                      attendance,
-                      staffName,
-                      shiftName
-                    );
-                    const handover = getRosterHandover(
-                      openHandover?.handover,
-                      departmentName
-                    );
-                    return (
-                      <TableRow key={row.roster.id}>
-                        <TableCell className="font-medium text-slate-800">
-                          {staffName}
-                        </TableCell>
-                        <TableCell className="text-slate-500">
-                          {departmentName}
-                        </TableCell>
-                        <TableCell>{shiftName}</TableCell>
-                        <TableCell className="text-slate-500">
-                          {row.roster.assignedDuty}
-                        </TableCell>
-                        <TableCell className="text-slate-500">
-                          {row.roster.startTime}–{row.roster.endTime}
-                        </TableCell>
-                        <TableCell>
-                          <RosterIndicator {...availability} />
-                        </TableCell>
-                        <TableCell>
-                          <RosterIndicator {...handover} />
-                        </TableCell>
-                        {canManage && (
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={updateAttendance.isPending}
-                              onClick={() =>
-                                updateAttendance.mutate({
-                                  rosterId: row.roster.id,
-                                  attendance:
-                                    attendance === "present"
-                                      ? "absent"
-                                      : "present",
-                                  notes:
-                                    attendance === "present"
-                                      ? "Marked absent from roster view."
-                                      : "Attendance restored from roster view.",
-                                })
-                              }
-                            >
-                              {attendance === "present"
-                                ? "Mark absent"
-                                : "Mark present"}
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
           </CardContent>
         </Card>
       </>
@@ -2912,85 +2820,95 @@ function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
   return (
     <>
       <PageHeading
-        eyebrow="Continuity of operations"
-        title="Shift handover"
-        description="Record unresolved tasks, equipment problems, stock shortages, incidents, and notes so operational risks never disappear between shifts."
+        eyebrow="Workforce readiness"
+        title="Duty roster and attendance"
+        description="See scheduled shift coverage, attendance exceptions, and replacements at a glance. Hover or focus an indicator for operational detail."
+        action={rosterActions}
       />
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base">Open handovers</CardTitle>
-            <CardDescription>
-              Items that still need acknowledgement or closure.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {modules.data.handovers.map(row => (
-              <div
-                className="rounded-xl border border-slate-200 p-3.5"
-                key={row.handover.id}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-800">
-                    {row.departmentName} · {row.handover.shift}
-                  </p>
-                  <StatusBadge
-                    status={row.handover.unresolved ? "pending" : "completed"}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  {row.handover.pendingTasks ||
-                    row.handover.operationalNotes ||
-                    "No detail recorded."}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base">Create handover note</CardTitle>
-            <CardDescription>
-              Record the items requiring follow-up by the next shift.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4">
-              <div>
-                <Label>Shift transition</Label>
-                <Input
-                  className="mt-2"
-                  value={shift}
-                  onChange={event => setShift(event.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Handover notes</Label>
-                <Textarea
-                  className="mt-2 min-h-48"
-                  value={notes}
-                  onChange={event => setNotes(event.target.value)}
-                  placeholder="Pending tasks, equipment problems, stock shortages, incidents, and essential operational notes."
-                />
-              </div>
-              <Button
-                disabled={handover.isPending || !modules.data.departments[0]}
-                onClick={() =>
-                  handover.mutate({
-                    departmentId: modules.data.departments[0].id,
-                    shift,
-                    pendingTasks: notes,
-                    operationalNotes: notes,
-                  })
-                }
-                className="bg-teal-700 hover:bg-teal-800"
-              >
-                {handover.isPending ? "Saving…" : "Save handover"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-0">
+          <p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">
+            Swipe horizontally to review availability and attendance actions.
+          </p>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[960px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Team member</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Shift</TableHead>
+                  <TableHead>Duty</TableHead>
+                  <TableHead>Hours</TableHead>
+                  <TableHead>Availability</TableHead>
+                  {canManage && (
+                    <TableHead className="text-right">Update</TableHead>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {modules.data.rosters.map(row => {
+                  const staffName = row.staffName ?? "Unassigned staff";
+                  const departmentName =
+                    row.departmentName ?? "this department";
+                  const shiftName = row.roster.shift ?? "Unspecified shift";
+                  const attendance = row.roster.attendance ?? "absent";
+                  const availability = getRosterAvailability(
+                    attendance,
+                    staffName,
+                    shiftName
+                  );
+                  return (
+                    <TableRow key={row.roster.id}>
+                      <TableCell className="font-medium text-slate-800">
+                        {staffName}
+                      </TableCell>
+                      <TableCell className="text-slate-500">
+                        {departmentName}
+                      </TableCell>
+                      <TableCell>{shiftName}</TableCell>
+                      <TableCell className="text-slate-500">
+                        {row.roster.assignedDuty}
+                      </TableCell>
+                      <TableCell className="text-slate-500">
+                        {row.roster.startTime}–{row.roster.endTime}
+                      </TableCell>
+                      <TableCell>
+                        <RosterIndicator {...availability} />
+                      </TableCell>
+                      {canManage && (
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={updateAttendance.isPending}
+                            onClick={() =>
+                              updateAttendance.mutate({
+                                rosterId: row.roster.id,
+                                attendance:
+                                  attendance === "present"
+                                    ? "absent"
+                                    : "present",
+                                notes:
+                                  attendance === "present"
+                                    ? "Marked absent from roster view."
+                                    : "Attendance restored from roster view.",
+                              })
+                            }
+                          >
+                            {attendance === "present"
+                              ? "Mark absent"
+                              : "Mark present"}
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </>
   );
 }
@@ -3811,8 +3729,8 @@ function ModuleOverview() {
           },
           {
             icon: CalendarClock,
-            title: "Duty & handover",
-            text: "Coordinate roster coverage and next-shift follow-up.",
+            title: "Duty roster",
+            text: "Coordinate roster coverage, attendance, and replacements.",
             href: "/roster",
           },
           {
@@ -3852,7 +3770,6 @@ export default function OperationsPage({
     | "equipment"
     | "inventory"
     | "roster"
-    | "handover"
     | "reports"
     | "calendar"
     | "settings"
@@ -3870,8 +3787,7 @@ export default function OperationsPage({
   if (view === "issues") return <Issues />;
   if (view === "equipment") return <EquipmentAndInventory mode="equipment" />;
   if (view === "inventory") return <EquipmentAndInventory mode="inventory" />;
-  if (view === "roster") return <RosterAndHandover mode="roster" />;
-  if (view === "handover") return <RosterAndHandover mode="handover" />;
+  if (view === "roster") return <Roster />;
   if (view === "reports") return <Reports />;
   if (view === "calendar") return <OperationsCalendar />;
   if (view === "settings") return <OperationsSettings />;

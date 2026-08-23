@@ -1,5 +1,9 @@
 import React, { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  WorkspaceError,
+  WorkspaceLoading,
+} from "@/components/WorkspaceFeedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -211,16 +215,23 @@ export default function WhatsAppTaskRegister() {
         </CardContent>
       </Card>
     );
-  if (register.isLoading || !register.data)
+  if (register.isLoading)
     return (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div
-            key={index}
-            className="h-32 animate-pulse rounded-2xl bg-slate-100"
-          />
-        ))}
-      </div>
+      <WorkspaceLoading
+        title="Loading WhatsApp task register"
+        description="Retrieving today’s department accountability workflow."
+      />
+    );
+  if (register.error || !register.data)
+    return (
+      <WorkspaceError
+        title="WhatsApp task register unavailable"
+        description={
+          register.error?.message ||
+          "The department accountability workflow could not be retrieved."
+        }
+        onRetry={() => register.refetch()}
+      />
     );
 
   const { summary, scorecards, tasks, cadenceSummary } = register.data;

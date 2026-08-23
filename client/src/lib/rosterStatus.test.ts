@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRosterAvailability, getRosterHandover } from "./rosterStatus";
+import { getRosterAvailability } from "./rosterStatus";
 
 describe("roster status indicators", () => {
   it("labels present, late, and absent staff with operationally meaningful availability states", () => {
@@ -14,19 +14,5 @@ describe("roster status indicators", () => {
     expect(
       getRosterAvailability("absent", "Priya Nair", "Night")
     ).toMatchObject({ label: "Unavailable", tone: "danger" });
-  });
-
-  it("surfaces unresolved handover content while retaining a clear state for departments without one", () => {
-    expect(
-      getRosterHandover(
-        { shift: "Night to Day", pendingTasks: "Confirm trolley seal" },
-        "Emergency"
-      )
-    ).toMatchObject({ label: "Follow-up", tone: "warning" });
-    expect(getRosterHandover(undefined, "Radiology")).toEqual({
-      label: "Clear",
-      tone: "success",
-      detail: "No unresolved handover items are recorded for Radiology.",
-    });
   });
 });

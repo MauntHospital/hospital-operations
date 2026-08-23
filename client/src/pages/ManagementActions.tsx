@@ -1,6 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  WorkspaceError,
+  WorkspaceLoading,
+} from "@/components/WorkspaceFeedback";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -85,16 +89,27 @@ export default function ManagementActions() {
     },
     onError: error => toast.error(error.message),
   });
-  if (actions.isLoading || modules.isLoading || !actions.data || !modules.data)
+  if (actions.isLoading || modules.isLoading)
     return (
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[0, 1, 2].map(item => (
-          <div
-            className="h-28 animate-pulse rounded-2xl bg-slate-100"
-            key={item}
-          />
-        ))}
-      </div>
+      <WorkspaceLoading
+        title="Loading management actions"
+        description="Retrieving owned operational follow-up actions."
+      />
+    );
+  if (actions.error || modules.error || !actions.data || !modules.data)
+    return (
+      <WorkspaceError
+        title="Management actions unavailable"
+        description={
+          actions.error?.message ||
+          modules.error?.message ||
+          "Management follow-up actions could not be retrieved."
+        }
+        onRetry={() => {
+          actions.refetch();
+          modules.refetch();
+        }}
+      />
     );
   const overdue = actions.data.filter(
     row => row.effectiveStatus === "overdue"

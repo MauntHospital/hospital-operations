@@ -141,18 +141,6 @@ const navigation = [
   },
   {
     icon: CalendarClock,
-    label: "Handover",
-    path: "/handover",
-    roles: [
-      "super_admin",
-      "hospital_admin",
-      "department_head",
-      "supervisor",
-      "staff",
-    ],
-  },
-  {
-    icon: CalendarClock,
     label: "Calendar",
     path: "/calendar",
     roles: [

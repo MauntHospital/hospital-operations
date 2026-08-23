@@ -138,3 +138,9 @@
 - [x] Add or update regression coverage for cleanup-sensitive logic and complete a second-pass unused-code review.
 - [x] Run formatting, test, type, production build, dependency, runtime-log, and responsive verification after cleanup.
 - [x] Publish the verified code-cleanup release with a code-quality report, preservation summary, and remaining-review register.
+- [x] Audit active manager workflows for missing loading animations and success/error feedback, and identify all Handover workspace entry points.
+- [x] Remove the Handover workspace from navigation and routing without deleting historical handover records or connected operational signals.
+- [x] Add consistent accessible loading animations and clear success/error notifications to active manager workflows.
+- [x] Add regression coverage for the removed Handover workspace and manager-feedback behavior.
+- [x] Verify the updated manager workflows on desktop and mobile, then publish the feedback and navigation update.
+- [x] Save and publish the verified manager workflow feedback and Handover-removal update.

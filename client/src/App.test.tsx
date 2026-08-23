@@ -17,6 +17,24 @@ describe("manager task route migration", () => {
     );
   });
 
+  it("removes Handover from manager navigation and redirects legacy Handover URLs to the roster", () => {
+    const appSource = compact(
+      readFileSync(new URL("./App.tsx", import.meta.url), "utf8")
+    );
+    const layoutSource = compact(
+      readFileSync(
+        new URL("./components/DashboardLayout.tsx", import.meta.url),
+        "utf8"
+      )
+    );
+
+    expect(appSource).toContain(
+      '<Routepath={"/handover"}><Redirectto="/roster"replace/></Route>'
+    );
+    expect(layoutSource).not.toContain('label:"Handover"');
+    expect(layoutSource).not.toContain('path:"/handover"');
+  });
+
   it("keeps reports hidden from viewer navigation and sends the operations overview to the manager task register", () => {
     const layoutSource = compact(
       readFileSync(
