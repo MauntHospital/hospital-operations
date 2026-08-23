@@ -51,7 +51,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 
 const managers = [
   "super_admin",
@@ -90,9 +90,12 @@ function cadenceLabel(frequency: string) {
 export default function WhatsAppTaskRegister() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const register = trpc.operations.whatsappTaskRegister.useQuery(undefined, {
-    enabled: Boolean(user && managers.includes(user.role)),
-  });
+  const search = useSearch();
+  const isOverdueView = new URLSearchParams(search).get("scope") === "overdue";
+  const register = trpc.operations.whatsappTaskRegister.useQuery(
+    { scope: isOverdueView ? "overdue" : "today" },
+    { enabled: Boolean(user && managers.includes(user.role)) }
+  );
   const [dispatchDialog, setDispatchDialog] = useState<any | null>(null);
   const [dispatchMessage, setDispatchMessage] = useState("");
   const [sentConfirmed, setSentConfirmed] = useState(false);
@@ -290,25 +293,36 @@ export default function WhatsAppTaskRegister() {
             Manager-led accountability
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
-            WhatsApp task register
+            {isOverdueView ? "Overdue task queue" : "WhatsApp task register"}
           </h1>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
-            Distribute department work manually through WhatsApp when needed, or
-            use <strong>Complete myself</strong> for work you perform directly
-            as operations manager. Directly completed work is not sent to
-            WhatsApp and does not affect department scoring.
+            {isOverdueView
+              ? "These are the exact unresolved assignments counted as overdue in the Control Tower. Review their due dates and record the appropriate manager action."
+              : "Distribute department work manually through WhatsApp when needed, or use Complete myself for work you perform directly as operations manager. Directly completed work is not sent to WhatsApp and does not affect department scoring."}
           </p>
         </div>
-        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950">
-          <p className="font-semibold">Scoring rule</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-teal-800">
-            A pending or no-reply WhatsApp outcome deducts one point once from
-            the department score.
-          </p>
-        </div>
+        {isOverdueView ? (
+          <Link href="/whatsapp-tasks">
+            <Button variant="outline" className="w-full sm:w-auto">
+              Show today’s tasks
+            </Button>
+          </Link>
+        ) : (
+          <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950">
+            <p className="font-semibold">Scoring rule</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-teal-800">
+              A pending or no-reply WhatsApp outcome deducts one point once from
+              the department score.
+            </p>
+          </div>
+        )}
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        className={
+          isOverdueView ? "hidden" : "grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        }
+      >
         <Metric
           icon={Send}
           label="Distributed task records"
@@ -339,7 +353,7 @@ export default function WhatsAppTaskRegister() {
         />
       </div>
 
-      <section className="mt-6">
+      <section className={isOverdueView ? "hidden" : "mt-6"}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
@@ -364,7 +378,9 @@ export default function WhatsAppTaskRegister() {
         </div>
       </section>
 
-      <Card className="mt-6 border-slate-200 shadow-sm">
+      <Card
+        className={isOverdueView ? "hidden" : "mt-6 border-slate-200 shadow-sm"}
+      >
         <CardHeader>
           <div className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-amber-600" />
@@ -450,14 +466,14 @@ export default function WhatsAppTaskRegister() {
       <Card className="mt-6 border-slate-200 shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">
-            Today’s task distribution and manager work
+            {isOverdueView
+              ? "Exact overdue assignments"
+              : "Today’s task distribution and manager work"}
           </CardTitle>
           <CardDescription>
-            Due daily, weekly, and monthly tasks appear here on their scheduled
-            date. Prepare a WhatsApp message for department work, or select{" "}
-            <strong>Complete myself</strong> when you will personally perform
-            the task. Direct completion is recorded in the audit trail without
-            creating a WhatsApp dispatch or point deduction.
+            {isOverdueView
+              ? "Only unresolved assignments due before now are listed. Complete, record an outcome, or continue the permitted lifecycle action for each task."
+              : "Due daily, weekly, and monthly tasks appear here on their scheduled date. Prepare a WhatsApp message for department work, or select Complete myself when you will personally perform the task. Direct completion is recorded in the audit trail without creating a WhatsApp dispatch or point deduction."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -578,8 +594,9 @@ export default function WhatsAppTaskRegister() {
                       colSpan={6}
                       className="h-28 text-center text-sm text-slate-500"
                     >
-                      There are no daily, weekly, or monthly task assignments
-                      due today.
+                      {isOverdueView
+                        ? "There are no unresolved overdue task assignments."
+                        : "There are no daily, weekly, or monthly task assignments due today."}
                     </TableCell>
                   </TableRow>
                 )}

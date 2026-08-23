@@ -144,3 +144,7 @@
 - [x] Add regression coverage for the removed Handover workspace and manager-feedback behavior.
 - [x] Verify the updated manager workflows on desktop and mobile, then publish the feedback and navigation update.
 - [x] Save and publish the verified manager workflow feedback and Handover-removal update.
+- [x] Inspect the Control Tower overdue-task count and WhatsApp task-register filter contract for a safe drill-through shortcut.
+- [x] Add a visible Control Tower shortcut that opens the exact overdue assignments in the manager task register.
+- [x] Add regression coverage and verify the overdue-task shortcut on desktop and mobile before publication.
+- [x] Save and publish the verified Control Tower overdue-task drill-through update.

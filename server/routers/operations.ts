@@ -74,9 +74,11 @@ const finding = z.enum([
 
 export const operationsRouter = router({
   dashboard: protectedProcedure.query(({ ctx }) => getDashboard(ctx.user)),
-  whatsappTaskRegister: protectedProcedure.query(({ ctx }) =>
-    getWhatsAppTaskRegister(ctx.user)
-  ),
+  whatsappTaskRegister: protectedProcedure
+    .input(z.object({ scope: z.enum(["today", "overdue"]).optional() }))
+    .query(({ ctx, input }) =>
+      getWhatsAppTaskRegister(ctx.user, input.scope ?? "today")
+    ),
   departmentSchedules: protectedProcedure.query(({ ctx }) =>
     getDepartmentTaskSchedules(ctx.user)
   ),

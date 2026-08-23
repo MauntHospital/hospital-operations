@@ -342,6 +342,18 @@ function CommandCenterSummary({ data }: { data: any }) {
                 {indicator.label}: {indicator.value}
               </Badge>
             ))}
+          {data.taskCounts.overdue > 0 && (
+            <Link href="/whatsapp-tasks?scope=overdue">
+              <Button
+                size="sm"
+                className="bg-rose-700 text-white hover:bg-rose-800"
+              >
+                <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                View {data.taskCounts.overdue} overdue task
+                {data.taskCounts.overdue === 1 ? "" : "s"}
+              </Button>
+            </Link>
+          )}
         </div>
       </CardHeader>
       <CardContent>

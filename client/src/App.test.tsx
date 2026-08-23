@@ -74,4 +74,28 @@ describe("manager task route migration", () => {
     expect(appSource).not.toContain("pages/Home");
     expect(appSource).not.toContain("ComponentShowcase");
   });
+
+  it("keeps the Control Tower overdue drill-through linked to the overdue-only task register", () => {
+    const operationsSource = compact(
+      readFileSync(
+        new URL("./pages/OperationsPage.tsx", import.meta.url),
+        "utf8"
+      )
+    );
+    const registerSource = compact(
+      readFileSync(
+        new URL("./pages/WhatsAppTaskRegister.tsx", import.meta.url),
+        "utf8"
+      )
+    );
+
+    expect(operationsSource).toContain('href="/whatsapp-tasks?scope=overdue"');
+    expect(operationsSource).toContain(
+      "View{data.taskCounts.overdue}overduetask"
+    );
+    expect(registerSource).toContain("useSearch");
+    expect(registerSource).toContain('get("scope")==="overdue"');
+    expect(registerSource).toContain('scope:isOverdueView?"overdue":"today"');
+    expect(registerSource).toContain("Exactoverdueassignments");
+  });
 });

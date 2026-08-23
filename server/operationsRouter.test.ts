@@ -14,4 +14,15 @@ describe("operations router access surface", () => {
     expect(source).toMatch(/^\s*taskComplete\s*:/m);
     expect(source).toMatch(/^\s*taskManagerDirectComplete\s*:/m);
   });
+
+  it("accepts an explicit manager-only overdue scope for the task-register drill-through", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "server/routers/operations.ts"),
+      "utf8"
+    );
+
+    expect(source).toMatch(/^\s*whatsappTaskRegister\s*:/m);
+    expect(source).toContain('z.enum(["today", "overdue"])');
+    expect(source).toContain('input.scope ?? "today"');
+  });
 });

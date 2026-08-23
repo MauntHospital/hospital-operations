@@ -1495,7 +1495,10 @@ function whatsappTaskMessage(input: {
   return `*${input.departmentName} — ${cadence}*\n\nTask: ${input.taskName}\nDue: ${due}\n\nPlease complete this task and reply in this department WhatsApp group by the end of the day with:\n• Completed — brief confirmation\n• Pending — reason and expected completion time\n\nUnresolved or no-reply tasks remain pending for the department and are recorded in the department accountability scorecard.`;
 }
 
-export async function getWhatsAppTaskRegister(user: User) {
+export async function getWhatsAppTaskRegister(
+  user: User,
+  scope: "today" | "overdue" = "today"
+) {
   ensureManager(user);
   await ensureOperationalDemo(user);
   await ensureVersion2Defaults();
@@ -1504,6 +1507,28 @@ export async function getWhatsAppTaskRegister(user: User) {
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
+  const assignmentScope =
+    scope === "overdue"
+      ? and(
+          lt(taskAssignments.dueAt, now),
+          notInArray(taskAssignments.status, [
+            "completed",
+            "pending_approval",
+            "skipped",
+            "failed",
+          ])
+        )
+      : and(
+          gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)),
+          lt(taskAssignments.dueAt, dayEnd)
+        );
+  const taskRegisterScope =
+    scope === "overdue"
+      ? assignmentScope
+      : and(
+          assignmentScope,
+          inArray(tasks.frequency, ["daily", "weekly", "monthly"])
+        );
   const rows = await db
     .select({
       assignment: taskAssignments,
@@ -1518,13 +1543,7 @@ export async function getWhatsAppTaskRegister(user: User) {
       whatsappTaskDispatches,
       eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)
     )
-    .where(
-      and(
-        gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)),
-        lt(taskAssignments.dueAt, dayEnd),
-        inArray(tasks.frequency, ["daily", "weekly", "monthly"])
-      )
-    )
+    .where(taskRegisterScope)
     .orderBy(asc(taskAssignments.dueAt));
   const scheduleRows = await db
     .select({ task: tasks, department: departments })
@@ -1589,6 +1608,7 @@ export async function getWhatsAppTaskRegister(user: User) {
     }
   );
   return {
+    scope,
     tasks: rows.map(row => ({
       ...row,
       suggestedMessage: whatsappTaskMessage({
