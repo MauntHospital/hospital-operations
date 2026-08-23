@@ -3,15 +3,55 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ followUpInputs: [] as any[], invalidations: [] as string[] }));
+const state = vi.hoisted(() => ({
+  followUpInputs: [] as any[],
+  invalidations: [] as string[],
+}));
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     operations: {
-      modules: { useQuery: () => ({ isLoading: false, data: { equipment: [], expiry: [], inventory: [{ inventory: { id: 41, name: "Emergency medicines", quantity: 0, reorderLevel: 20, unit: "packs" }, departmentName: "Emergency", lowStock: true }] } }) },
-      operationalFollowUpCreate: { useMutation: (options: any) => ({ isPending: false, mutate: (input: any) => { state.followUpInputs.push(input); options.onSuccess(); } }) },
+      modules: {
+        useQuery: () => ({
+          isLoading: false,
+          data: {
+            equipment: [],
+            expiry: [],
+            inventory: [
+              {
+                inventory: {
+                  id: 41,
+                  name: "Emergency medicines",
+                  quantity: 0,
+                  reorderLevel: 20,
+                  unit: "packs",
+                },
+                departmentName: "Emergency",
+                lowStock: true,
+              },
+            ],
+          },
+        }),
+      },
+      operationalFollowUpCreate: {
+        useMutation: (options: any) => ({
+          isPending: false,
+          mutate: (input: any) => {
+            state.followUpInputs.push(input);
+            options.onSuccess();
+          },
+        }),
+      },
     },
-    useUtils: () => ({ operations: { dashboard: { invalidate: () => state.invalidations.push("dashboard") }, modules: { invalidate: () => state.invalidations.push("modules") }, whatsappTaskRegister: { invalidate: () => state.invalidations.push("register") } } }),
+    useUtils: () => ({
+      operations: {
+        dashboard: { invalidate: () => state.invalidations.push("dashboard") },
+        modules: { invalidate: () => state.invalidations.push("modules") },
+        whatsappTaskRegister: {
+          invalidate: () => state.invalidations.push("register"),
+        },
+      },
+    }),
   },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -41,10 +81,16 @@ describe("OperationalFollowUps", () => {
     expect(container.textContent).toContain("Emergency medicines");
     expect(state.followUpInputs).toEqual([]);
 
-    const createButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Create follow-up task")) as HTMLButtonElement;
+    const createButton = Array.from(container.querySelectorAll("button")).find(
+      button => button.textContent?.includes("Create follow-up task")
+    ) as HTMLButtonElement;
     act(() => createButton.click());
 
-    expect(state.followUpInputs).toEqual([{ sourceType: "inventory", sourceId: 41 }]);
-    expect(state.invalidations).toEqual(expect.arrayContaining(["dashboard", "modules", "register"]));
+    expect(state.followUpInputs).toEqual([
+      { sourceType: "inventory", sourceId: 41 },
+    ]);
+    expect(state.invalidations).toEqual(
+      expect.arrayContaining(["dashboard", "modules", "register"])
+    );
   });
 });

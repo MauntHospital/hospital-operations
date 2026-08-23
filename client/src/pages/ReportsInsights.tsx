@@ -1,24 +1,215 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, ClipboardCheck, Clock3, ShieldAlert, TrendingDown } from "lucide-react";
+import {
+  AlertTriangle,
+  ClipboardCheck,
+  Clock3,
+  ShieldAlert,
+  TrendingDown,
+} from "lucide-react";
 import React from "react";
 
 export default function ReportsInsights() {
   const { user } = useAuth();
-  const isManager = Boolean(user && ["super_admin", "hospital_admin", "department_head", "supervisor"].includes(user.role));
-  const report = trpc.operations.reports.useQuery(undefined, { enabled: isManager });
-  if (!isManager) return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><ShieldAlert className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Manager access required</h1><p className="mt-2 text-sm leading-relaxed text-slate-500">Operational Insights is available to managers because it includes hospital-wide department performance and accountability data.</p></CardContent></Card>;
-  if (report.isError) return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><AlertTriangle className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Operational Insights is unavailable</h1><p className="mt-2 text-sm leading-relaxed text-slate-500">The report could not be loaded. Refresh the page or verify your manager access before trying again.</p></CardContent></Card>;
-  if (report.isLoading || !report.data) return <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div className="h-36 animate-pulse rounded-2xl bg-slate-100" key={index} />)}</div>;
+  const isManager = Boolean(
+    user &&
+      [
+        "super_admin",
+        "hospital_admin",
+        "department_head",
+        "supervisor",
+      ].includes(user.role)
+  );
+  const report = trpc.operations.reports.useQuery(undefined, {
+    enabled: isManager,
+  });
+  if (!isManager)
+    return (
+      <Card className="mx-auto max-w-xl border-rose-200">
+        <CardContent className="p-6 text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-rose-600" />
+          <h1 className="mt-3 text-xl font-semibold text-slate-900">
+            Manager access required
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">
+            Operational Insights is available to managers because it includes
+            hospital-wide department performance and accountability data.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  if (report.isError)
+    return (
+      <Card className="mx-auto max-w-xl border-rose-200">
+        <CardContent className="p-6 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-rose-600" />
+          <h1 className="mt-3 text-xl font-semibold text-slate-900">
+            Operational Insights is unavailable
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">
+            The report could not be loaded. Refresh the page or verify your
+            manager access before trying again.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  if (report.isLoading || !report.data)
+    return (
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div
+            className="h-36 animate-pulse rounded-2xl bg-slate-100"
+            key={index}
+          />
+        ))}
+      </div>
+    );
   const data = report.data;
-  const acknowledgementTime = data.responseTimeAnalytics.averageAcknowledgementMinutes === null ? "—" : `${data.responseTimeAnalytics.averageAcknowledgementMinutes} min`;
-  const responseTime = data.responseTimeAnalytics.averageResponseMinutes === null ? "—" : `${data.responseTimeAnalytics.averageResponseMinutes} min`;
-  return <><section className="mb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">Manager accountability</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Operational insights</h1><p className="mt-1 max-w-3xl text-sm text-slate-500">Review WhatsApp compliance, response time, active department execution, and recurring issue patterns for manager meetings.</p></section><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Hospital reply compliance" value={`${data.complianceSummary.hospitalRate}%`} icon={ClipboardCheck} tone="teal" /><Metric label="Pending or no reply" value={data.whatsappSummary.pendingOrNoReply} icon={AlertTriangle} tone="amber" /><Metric label="Points lost this month" value={data.whatsappSummary.pointsLost} icon={TrendingDown} tone="rose" /><Metric label="Average acknowledgement" value={acknowledgementTime} icon={Clock3} tone="teal" /><Metric label="Average EOD response" value={responseTime} icon={Clock3} tone="amber" /></div><div className="mt-6 grid gap-6 lg:grid-cols-2"><Card><CardHeader><CardTitle className="text-base">Active department execution</CardTitle><CardDescription>Completion across current assignments and unresolved carry-over. WhatsApp reply compliance is shown separately above.</CardDescription></CardHeader><CardContent className="space-y-4">{data.departmentPerformance.map(row => <div key={row.name}><div className="flex justify-between text-sm"><span className="font-medium text-slate-800">{row.name}</span><span className="text-slate-500">{row.completionRate}%</span></div><Progress value={row.completionRate} className="mt-2 h-2" /><p className="mt-1 text-xs text-slate-500">{row.overdue} overdue · {row.openIssues} open issues</p></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="text-base">Repeated problem trends</CardTitle><CardDescription>Issue categories ranked by recorded frequency.</CardDescription></CardHeader><CardContent className="space-y-3">{data.repeatedProblemTrends.map(row => <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3" key={row.category}><span className="text-sm font-medium text-slate-800">{row.category}</span><span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">{row.count}</span></div>)}{!data.repeatedProblemTrends.length && <p className="text-sm text-slate-500">No issue categories have been recorded.</p>}</CardContent></Card></div></>;
+  const acknowledgementTime =
+    data.responseTimeAnalytics.averageAcknowledgementMinutes === null
+      ? "—"
+      : `${data.responseTimeAnalytics.averageAcknowledgementMinutes} min`;
+  const responseTime =
+    data.responseTimeAnalytics.averageResponseMinutes === null
+      ? "—"
+      : `${data.responseTimeAnalytics.averageResponseMinutes} min`;
+  return (
+    <>
+      <section className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">
+          Manager accountability
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+          Operational insights
+        </h1>
+        <p className="mt-1 max-w-3xl text-sm text-slate-500">
+          Review WhatsApp compliance, response time, active department
+          execution, and recurring issue patterns for manager meetings.
+        </p>
+      </section>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Metric
+          label="Hospital reply compliance"
+          value={`${data.complianceSummary.hospitalRate}%`}
+          icon={ClipboardCheck}
+          tone="teal"
+        />
+        <Metric
+          label="Pending or no reply"
+          value={data.whatsappSummary.pendingOrNoReply}
+          icon={AlertTriangle}
+          tone="amber"
+        />
+        <Metric
+          label="Points lost this month"
+          value={data.whatsappSummary.pointsLost}
+          icon={TrendingDown}
+          tone="rose"
+        />
+        <Metric
+          label="Average acknowledgement"
+          value={acknowledgementTime}
+          icon={Clock3}
+          tone="teal"
+        />
+        <Metric
+          label="Average EOD response"
+          value={responseTime}
+          icon={Clock3}
+          tone="amber"
+        />
+      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Active department execution
+            </CardTitle>
+            <CardDescription>
+              Completion across current assignments and unresolved carry-over.
+              WhatsApp reply compliance is shown separately above.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {data.departmentPerformance.map(row => (
+              <div key={row.name}>
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium text-slate-800">{row.name}</span>
+                  <span className="text-slate-500">{row.completionRate}%</span>
+                </div>
+                <Progress value={row.completionRate} className="mt-2 h-2" />
+                <p className="mt-1 text-xs text-slate-500">
+                  {row.overdue} overdue · {row.openIssues} open issues
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Repeated problem trends</CardTitle>
+            <CardDescription>
+              Issue categories ranked by recorded frequency.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.repeatedProblemTrends.map(row => (
+              <div
+                className="flex items-center justify-between rounded-xl bg-slate-50 p-3"
+                key={row.category}
+              >
+                <span className="text-sm font-medium text-slate-800">
+                  {row.category}
+                </span>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                  {row.count}
+                </span>
+              </div>
+            ))}
+            {!data.repeatedProblemTrends.length && (
+              <p className="text-sm text-slate-500">
+                No issue categories have been recorded.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
 }
 
-function Metric({ label, value, icon: Icon, tone }: { label: string; value: string | number; icon: typeof Clock3; tone: "teal" | "amber" | "rose" }) {
-  const color = tone === "teal" ? "text-teal-700" : tone === "amber" ? "text-amber-600" : "text-rose-700";
-  return <Card><CardContent className="p-4"><Icon className={`h-5 w-5 ${color}`} /><p className="mt-4 text-3xl font-semibold">{value}</p><p className="text-sm text-slate-500">{label}</p></CardContent></Card>;
+function Metric({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  icon: typeof Clock3;
+  tone: "teal" | "amber" | "rose";
+}) {
+  const color =
+    tone === "teal"
+      ? "text-teal-700"
+      : tone === "amber"
+        ? "text-amber-600"
+        : "text-rose-700";
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <Icon className={`h-5 w-5 ${color}`} />
+        <p className="mt-4 text-3xl font-semibold">{value}</p>
+        <p className="text-sm text-slate-500">{label}</p>
+      </CardContent>
+    </Card>
+  );
 }

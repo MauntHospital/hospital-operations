@@ -1,6 +1,18 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { Bell, CheckCircle2, RotateCcw, UserRoundCheck } from "lucide-react";
@@ -11,9 +23,255 @@ export default function NotificationCenter() {
   const utils = trpc.useUtils();
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [statusFilter, setStatusFilter] = useState("open");
-  const update = trpc.operations.operationalAlertUpdate.useMutation({ onSuccess: () => { utils.operations.operationalAlerts.invalidate(); utils.operations.dashboard.invalidate(); } });
-  if (alerts.isLoading || !alerts.data) return <div className="grid gap-4 sm:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <div className="h-32 animate-pulse rounded-2xl bg-slate-100" key={i} />)}</div>;
-  const statusStyle = (status: string) => status === "resolved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "acknowledged" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-amber-200 bg-amber-50 text-amber-800";
-  const visibleAlerts = alerts.data.alerts.filter(item => statusFilter === "all" || item.handlingStatus === statusFilter);
-  return <><section className="mb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">Manager notification center</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Operational alerts</h1><p className="mt-1 max-w-3xl text-sm text-slate-500">Assign every alert to a manager, acknowledge when handling begins, and resolve it only after the operational issue is addressed. The handling timeline remains visible for review.</p></section><Card className="border-slate-200 shadow-sm"><CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between"><div><CardTitle className="text-base">Alert ownership and handling</CardTitle><CardDescription>Newest system-generated alerts for issues, task escalation, maintenance, expiry, and roster coverage.</CardDescription></div><div className="w-full sm:w-52"><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger aria-label="Filter alerts by handling status" className="bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open alerts</SelectItem><SelectItem value="acknowledged">Acknowledged alerts</SelectItem><SelectItem value="resolved">Resolved alerts</SelectItem><SelectItem value="all">All alerts</SelectItem></SelectContent></Select></div></CardHeader><CardContent className="space-y-4">{visibleAlerts.map(item => <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4" key={item.id}><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div className="flex min-w-0 gap-3"><div className="mt-0.5 h-8 rounded-lg bg-teal-100 p-2 text-teal-700"><Bell className="h-4 w-4" /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-slate-800">{item.title}</p><span className={`rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusStyle(item.handlingStatus)}`}>{item.handlingStatus}</span></div><p className="mt-1 text-sm text-slate-500">{item.body}</p><p className="mt-2 text-xs text-slate-400">Created {new Date(item.createdAt).toLocaleString()}</p></div></div><div className="grid w-full gap-2 sm:grid-cols-2 lg:w-[360px]"><Select value={item.ownerUserId ? String(item.ownerUserId) : "unassigned"} onValueChange={ownerUserId => { if (ownerUserId !== "unassigned") update.mutate({ notificationId: item.id, action: "assign", ownerUserId: Number(ownerUserId), note: notes[item.id] || undefined }); }}><SelectTrigger className="bg-white"><SelectValue placeholder="Assign owner" /></SelectTrigger><SelectContent><SelectItem value="unassigned">No owner assigned</SelectItem>{alerts.data.managers.map(manager => <SelectItem key={manager.id} value={String(manager.id)}>{manager.name || `Manager #${manager.id}`}</SelectItem>)}</SelectContent></Select><div className="flex flex-wrap gap-2">{item.handlingStatus === "open" && <Button size="sm" variant="outline" disabled={update.isPending} onClick={() => update.mutate({ notificationId: item.id, action: "acknowledge", note: notes[item.id] || undefined })}><UserRoundCheck className="mr-1.5 h-3.5 w-3.5" />Acknowledge</Button>}{item.handlingStatus === "acknowledged" && <Button size="sm" className="bg-teal-700 hover:bg-teal-800" disabled={update.isPending} onClick={() => update.mutate({ notificationId: item.id, action: "resolve", note: notes[item.id] || undefined })}><CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />Resolve</Button>}{item.handlingStatus === "resolved" && <Button size="sm" variant="outline" disabled={update.isPending} onClick={() => update.mutate({ notificationId: item.id, action: "reopen", note: notes[item.id] || undefined })}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reopen</Button>}</div></div></div><div className="mt-4 grid gap-3 border-t border-slate-200 pt-3 md:grid-cols-[1fr_1.35fr]"><div className="space-y-1 text-xs text-slate-500"><p><span className="font-medium text-slate-700">Owner:</span> {item.ownerName || "Not assigned"}</p>{item.acknowledgedAt && <p><span className="font-medium text-slate-700">Acknowledged:</span> {item.acknowledgedByName || "Manager"} · {new Date(item.acknowledgedAt).toLocaleString()}</p>}{item.resolvedAt && <p><span className="font-medium text-slate-700">Resolved:</span> {item.resolvedByName || "Manager"} · {new Date(item.resolvedAt).toLocaleString()}</p>}{item.handlingNote && <p><span className="font-medium text-slate-700">Latest note:</span> {item.handlingNote}</p>}</div><Textarea value={notes[item.id] || ""} onChange={event => setNotes({ ...notes, [item.id]: event.target.value })} placeholder="Add a handling note before assigning, acknowledging, resolving, or reopening…" className="min-h-20 bg-white text-sm" /></div>{item.history.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{item.history.map(entry => <span key={entry.audit.id} className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-500">{entry.audit.action.replaceAll("_", " ")} · {entry.actorName || "System"} · {new Date(entry.audit.createdAt).toLocaleString()}</span>)}</div>}</div>)}{!visibleAlerts.length && <p className="p-6 text-center text-sm text-slate-500">No {statusFilter === "all" ? "current" : statusFilter} operational alerts.</p>}</CardContent></Card></>;
+  const update = trpc.operations.operationalAlertUpdate.useMutation({
+    onSuccess: () => {
+      utils.operations.operationalAlerts.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  if (alerts.isLoading || !alerts.data)
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div
+            className="h-32 animate-pulse rounded-2xl bg-slate-100"
+            key={i}
+          />
+        ))}
+      </div>
+    );
+  const statusStyle = (status: string) =>
+    status === "resolved"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : status === "acknowledged"
+        ? "border-sky-200 bg-sky-50 text-sky-700"
+        : "border-amber-200 bg-amber-50 text-amber-800";
+  const visibleAlerts = alerts.data.alerts.filter(
+    item => statusFilter === "all" || item.handlingStatus === statusFilter
+  );
+  return (
+    <>
+      <section className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">
+          Manager notification center
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+          Operational alerts
+        </h1>
+        <p className="mt-1 max-w-3xl text-sm text-slate-500">
+          Assign every alert to a manager, acknowledge when handling begins, and
+          resolve it only after the operational issue is addressed. The handling
+          timeline remains visible for review.
+        </p>
+      </section>
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <CardTitle className="text-base">
+              Alert ownership and handling
+            </CardTitle>
+            <CardDescription>
+              Newest system-generated alerts for issues, task escalation,
+              maintenance, expiry, and roster coverage.
+            </CardDescription>
+          </div>
+          <div className="w-full sm:w-52">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger
+                aria-label="Filter alerts by handling status"
+                className="bg-white"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">Open alerts</SelectItem>
+                <SelectItem value="acknowledged">
+                  Acknowledged alerts
+                </SelectItem>
+                <SelectItem value="resolved">Resolved alerts</SelectItem>
+                <SelectItem value="all">All alerts</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {visibleAlerts.map(item => (
+            <div
+              className="rounded-xl border border-slate-200 bg-slate-50/70 p-4"
+              key={item.id}
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex min-w-0 gap-3">
+                  <div className="mt-0.5 h-8 rounded-lg bg-teal-100 p-2 text-teal-700">
+                    <Bell className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {item.title}
+                      </p>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusStyle(item.handlingStatus)}`}
+                      >
+                        {item.handlingStatus}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">{item.body}</p>
+                    <p className="mt-2 text-xs text-slate-400">
+                      Created {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-[360px]">
+                  <Select
+                    value={
+                      item.ownerUserId ? String(item.ownerUserId) : "unassigned"
+                    }
+                    onValueChange={ownerUserId => {
+                      if (ownerUserId !== "unassigned")
+                        update.mutate({
+                          notificationId: item.id,
+                          action: "assign",
+                          ownerUserId: Number(ownerUserId),
+                          note: notes[item.id] || undefined,
+                        });
+                    }}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Assign owner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">
+                        No owner assigned
+                      </SelectItem>
+                      {alerts.data.managers.map(manager => (
+                        <SelectItem key={manager.id} value={String(manager.id)}>
+                          {manager.name || `Manager #${manager.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    {item.handlingStatus === "open" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={update.isPending}
+                        onClick={() =>
+                          update.mutate({
+                            notificationId: item.id,
+                            action: "acknowledge",
+                            note: notes[item.id] || undefined,
+                          })
+                        }
+                      >
+                        <UserRoundCheck className="mr-1.5 h-3.5 w-3.5" />
+                        Acknowledge
+                      </Button>
+                    )}
+                    {item.handlingStatus === "acknowledged" && (
+                      <Button
+                        size="sm"
+                        className="bg-teal-700 hover:bg-teal-800"
+                        disabled={update.isPending}
+                        onClick={() =>
+                          update.mutate({
+                            notificationId: item.id,
+                            action: "resolve",
+                            note: notes[item.id] || undefined,
+                          })
+                        }
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        Resolve
+                      </Button>
+                    )}
+                    {item.handlingStatus === "resolved" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={update.isPending}
+                        onClick={() =>
+                          update.mutate({
+                            notificationId: item.id,
+                            action: "reopen",
+                            note: notes[item.id] || undefined,
+                          })
+                        }
+                      >
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                        Reopen
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 border-t border-slate-200 pt-3 md:grid-cols-[1fr_1.35fr]">
+                <div className="space-y-1 text-xs text-slate-500">
+                  <p>
+                    <span className="font-medium text-slate-700">Owner:</span>{" "}
+                    {item.ownerName || "Not assigned"}
+                  </p>
+                  {item.acknowledgedAt && (
+                    <p>
+                      <span className="font-medium text-slate-700">
+                        Acknowledged:
+                      </span>{" "}
+                      {item.acknowledgedByName || "Manager"} ·{" "}
+                      {new Date(item.acknowledgedAt).toLocaleString()}
+                    </p>
+                  )}
+                  {item.resolvedAt && (
+                    <p>
+                      <span className="font-medium text-slate-700">
+                        Resolved:
+                      </span>{" "}
+                      {item.resolvedByName || "Manager"} ·{" "}
+                      {new Date(item.resolvedAt).toLocaleString()}
+                    </p>
+                  )}
+                  {item.handlingNote && (
+                    <p>
+                      <span className="font-medium text-slate-700">
+                        Latest note:
+                      </span>{" "}
+                      {item.handlingNote}
+                    </p>
+                  )}
+                </div>
+                <Textarea
+                  value={notes[item.id] || ""}
+                  onChange={event =>
+                    setNotes({ ...notes, [item.id]: event.target.value })
+                  }
+                  placeholder="Add a handling note before assigning, acknowledging, resolving, or reopening…"
+                  className="min-h-20 bg-white text-sm"
+                />
+              </div>
+              {item.history.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {item.history.map(entry => (
+                    <span
+                      key={entry.audit.id}
+                      className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-500"
+                    >
+                      {entry.audit.action.replaceAll("_", " ")} ·{" "}
+                      {entry.actorName || "System"} ·{" "}
+                      {new Date(entry.audit.createdAt).toLocaleString()}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {!visibleAlerts.length && (
+            <p className="p-6 text-center text-sm text-slate-500">
+              No {statusFilter === "all" ? "current" : statusFilter} operational
+              alerts.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
 }

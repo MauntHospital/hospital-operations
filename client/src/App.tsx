@@ -7,7 +7,6 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
 import DepartmentSchedules from "./pages/DepartmentSchedules";
 import ManagerSettings from "./pages/ManagerSettings";
 import WhatsAppTaskRegister from "./pages/WhatsAppTaskRegister";
@@ -24,27 +23,93 @@ function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/department-schedules/new"}><DashboardLayout><TaskCreate /></DashboardLayout></Route>
-      <Route path={"/department-schedules"}><DashboardLayout><DepartmentSchedules /></DashboardLayout></Route>
-      <Route path={"/whatsapp-tasks"}><DashboardLayout><WhatsAppTaskRegister /></DashboardLayout></Route>
-      <Route path={"/"}><AppShell view="dashboard" /></Route>
-      <Route path={"/my-day"}><Redirect to="/whatsapp-tasks" replace /></Route>
-      <Route path={"/tasks/:id"}><Redirect to="/whatsapp-tasks" replace /></Route>
-      <Route path={"/issues"}><AppShell view="issues" /></Route>
-      <Route path={"/risks"}><DashboardLayout><RiskRegister /></DashboardLayout></Route>
-      <Route path={"/management-actions"}><DashboardLayout><ManagementActions /></DashboardLayout></Route>
-      <Route path={"/scoring-rules"}><DashboardLayout><ScoringRules /></DashboardLayout></Route>
-      <Route path={"/operational-follow-ups"}><DashboardLayout><OperationalFollowUps /></DashboardLayout></Route>
-      <Route path={"/search"}><DashboardLayout><CommandSearch /></DashboardLayout></Route>
-      <Route path={"/equipment"}><AppShell view="equipment" /></Route>
-      <Route path={"/inventory"}><AppShell view="inventory" /></Route>
-      <Route path={"/roster"}><AppShell view="roster" /></Route>
-      <Route path={"/handover"}><AppShell view="handover" /></Route>
-      <Route path={"/reports"}><DashboardLayout><ReportsInsights /></DashboardLayout></Route>
-      <Route path={"/calendar"}><DashboardLayout><CalendarEvents /></DashboardLayout></Route>
-      <Route path={"/notifications"}><DashboardLayout><NotificationCenter /></DashboardLayout></Route>
-      <Route path={"/settings"}><DashboardLayout><ManagerSettings /></DashboardLayout></Route>
-      <Route path={"/operations"}><AppShell view="overview" /></Route>
+      <Route path={"/department-schedules/new"}>
+        <DashboardLayout>
+          <TaskCreate />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/department-schedules"}>
+        <DashboardLayout>
+          <DepartmentSchedules />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/whatsapp-tasks"}>
+        <DashboardLayout>
+          <WhatsAppTaskRegister />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/"}>
+        <AppShell view="dashboard" />
+      </Route>
+      <Route path={"/my-day"}>
+        <Redirect to="/whatsapp-tasks" replace />
+      </Route>
+      <Route path={"/tasks/:id"}>
+        <Redirect to="/whatsapp-tasks" replace />
+      </Route>
+      <Route path={"/issues"}>
+        <AppShell view="issues" />
+      </Route>
+      <Route path={"/risks"}>
+        <DashboardLayout>
+          <RiskRegister />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/management-actions"}>
+        <DashboardLayout>
+          <ManagementActions />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/scoring-rules"}>
+        <DashboardLayout>
+          <ScoringRules />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/operational-follow-ups"}>
+        <DashboardLayout>
+          <OperationalFollowUps />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/search"}>
+        <DashboardLayout>
+          <CommandSearch />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/equipment"}>
+        <AppShell view="equipment" />
+      </Route>
+      <Route path={"/inventory"}>
+        <AppShell view="inventory" />
+      </Route>
+      <Route path={"/roster"}>
+        <AppShell view="roster" />
+      </Route>
+      <Route path={"/handover"}>
+        <AppShell view="handover" />
+      </Route>
+      <Route path={"/reports"}>
+        <DashboardLayout>
+          <ReportsInsights />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/calendar"}>
+        <DashboardLayout>
+          <CalendarEvents />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/notifications"}>
+        <DashboardLayout>
+          <NotificationCenter />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/settings"}>
+        <DashboardLayout>
+          <ManagerSettings />
+        </DashboardLayout>
+      </Route>
+      <Route path={"/operations"}>
+        <AppShell view="overview" />
+      </Route>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

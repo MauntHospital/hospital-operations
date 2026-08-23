@@ -1,9 +1,28 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { CalendarClock, ClipboardPlus, ShieldAlert } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -13,13 +32,219 @@ const frequencies = ["daily", "weekly", "monthly"] as const;
 
 export default function DepartmentSchedules() {
   const { user } = useAuth();
-  const schedules = trpc.operations.departmentSchedules.useQuery(undefined, { enabled: user?.role === "super_admin" });
+  const schedules = trpc.operations.departmentSchedules.useQuery(undefined, {
+    enabled: user?.role === "super_admin",
+  });
   const [department, setDepartment] = useState("all");
   const [frequency, setFrequency] = useState("all");
-  const rows = useMemo(() => (schedules.data ?? []).filter(row => (department === "all" || String(row.departmentId) === department) && (frequency === "all" || row.task.frequency === frequency)), [schedules.data, department, frequency]);
-  const counts = useMemo(() => Object.fromEntries(frequencies.map(item => [item, (schedules.data ?? []).filter(row => row.task.frequency === item).length])), [schedules.data]);
-  if (user && user.role !== "super_admin") return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><ShieldAlert className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Super-admin access required</h1><p className="mt-2 text-sm text-slate-500">Department task schedules can only be created and managed by the super administrator.</p></CardContent></Card>;
-  if (schedules.isLoading || !schedules.data) return <div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map(item => <div className="h-28 animate-pulse rounded-2xl bg-slate-100" key={item} />)}</div>;
-  const departments = Array.from(new Map(schedules.data.map(row => [row.departmentId, row.departmentName])).entries());
-  return <><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">Super-admin planning</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Department task schedules</h1><p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">Add, review, and coordinate daily, weekly, and monthly WhatsApp tasks for each department. Weekly checks can be set to Saturday or Sunday.</p></div><Link href="/department-schedules/new"><Button className="bg-teal-700 hover:bg-teal-800"><ClipboardPlus className="mr-2 h-4 w-4" />Add WhatsApp task</Button></Link></div><div className="mt-6 grid gap-4 md:grid-cols-3">{frequencies.map(item => <Card key={item} className="border-slate-200 shadow-sm"><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm font-medium capitalize text-slate-600">{item} schedules</p><p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{counts[item]}</p></div><div className="rounded-xl bg-teal-50 p-2.5 text-teal-700"><CalendarClock className="h-5 w-5" /></div></CardContent></Card>)}</div><Card className="mt-6 border-slate-200 shadow-sm"><CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle className="text-base">Department WhatsApp task plan</CardTitle><CardDescription>Daily, weekly, and monthly schedules are shown by department.</CardDescription></div><div className="flex flex-wrap gap-2"><Select value={department} onValueChange={setDepartment}><SelectTrigger className="w-48"><SelectValue placeholder="All departments" /></SelectTrigger><SelectContent><SelectItem value="all">All departments</SelectItem>{departments.map(([id, name]) => <SelectItem key={id} value={String(id)}>{name}</SelectItem>)}</SelectContent></Select><Select value={frequency} onValueChange={setFrequency}><SelectTrigger className="w-36"><SelectValue placeholder="Frequency" /></SelectTrigger><SelectContent><SelectItem value="all">All types</SelectItem>{frequencies.map(item => <SelectItem key={item} value={item} className="capitalize">{item}</SelectItem>)}</SelectContent></Select></div></CardHeader><CardContent><p className="mb-3 text-xs text-slate-500 md:hidden">Scroll horizontally to review the manager, next run, and status columns.</p><div className="overflow-x-auto"><Table className="min-w-[760px]"><TableHeader><TableRow><TableHead>Department</TableHead><TableHead>Task</TableHead><TableHead>Frequency</TableHead><TableHead>Manager</TableHead><TableHead>Next run</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => <TableRow key={row.task.id}><TableCell className="font-medium text-slate-800">{row.departmentName}</TableCell><TableCell><p className="font-medium text-slate-800">{row.task.name}</p><p className="mt-0.5 text-xs text-slate-500">{row.task.category}</p></TableCell><TableCell><Badge variant="outline" className="capitalize">{row.task.frequency}{row.task.recurrenceRule?.startsWith("weekly:") ? ` · ${row.task.recurrenceRule.split(":")[1]}` : ""}</Badge></TableCell><TableCell className="text-slate-600">{row.ownerName ?? "Department queue"}</TableCell><TableCell className="text-slate-600">{row.nextRunAt ? new Date(row.nextRunAt).toLocaleString() : "One-time assignment"}</TableCell><TableCell><Badge className={row.task.active ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100" : "bg-slate-100 text-slate-600 hover:bg-slate-100"}>{row.task.active ? "Active" : "Inactive"}</Badge></TableCell></TableRow>)}{rows.length === 0 && <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-slate-500">No matching WhatsApp task schedules. Add a daily, weekly, or monthly plan to begin.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card></>;
+  const rows = useMemo(
+    () =>
+      (schedules.data ?? []).filter(
+        row =>
+          (department === "all" || String(row.departmentId) === department) &&
+          (frequency === "all" || row.task.frequency === frequency)
+      ),
+    [schedules.data, department, frequency]
+  );
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        frequencies.map(item => [
+          item,
+          (schedules.data ?? []).filter(row => row.task.frequency === item)
+            .length,
+        ])
+      ),
+    [schedules.data]
+  );
+  if (user && user.role !== "super_admin")
+    return (
+      <Card className="mx-auto max-w-xl border-rose-200">
+        <CardContent className="p-6 text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-rose-600" />
+          <h1 className="mt-3 text-xl font-semibold text-slate-900">
+            Super-admin access required
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Department task schedules can only be created and managed by the
+            super administrator.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  if (schedules.isLoading || !schedules.data)
+    return (
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map(item => (
+          <div
+            className="h-28 animate-pulse rounded-2xl bg-slate-100"
+            key={item}
+          />
+        ))}
+      </div>
+    );
+  const departments = Array.from(
+    new Map(
+      schedules.data.map(row => [row.departmentId, row.departmentName])
+    ).entries()
+  );
+  return (
+    <>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">
+            Super-admin planning
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
+            Department task schedules
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
+            Add, review, and coordinate daily, weekly, and monthly WhatsApp
+            tasks for each department. Weekly checks can be set to Saturday or
+            Sunday.
+          </p>
+        </div>
+        <Link href="/department-schedules/new">
+          <Button className="bg-teal-700 hover:bg-teal-800">
+            <ClipboardPlus className="mr-2 h-4 w-4" />
+            Add WhatsApp task
+          </Button>
+        </Link>
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        {frequencies.map(item => (
+          <Card key={item} className="border-slate-200 shadow-sm">
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm font-medium capitalize text-slate-600">
+                  {item} schedules
+                </p>
+                <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
+                  {counts[item]}
+                </p>
+              </div>
+              <div className="rounded-xl bg-teal-50 p-2.5 text-teal-700">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card className="mt-6 border-slate-200 shadow-sm">
+        <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">
+              Department WhatsApp task plan
+            </CardTitle>
+            <CardDescription>
+              Daily, weekly, and monthly schedules are shown by department.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All departments</SelectItem>
+                {departments.map(([id, name]) => (
+                  <SelectItem key={id} value={String(id)}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={frequency} onValueChange={setFrequency}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Frequency" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {frequencies.map(item => (
+                  <SelectItem key={item} value={item} className="capitalize">
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-slate-500 md:hidden">
+            Scroll horizontally to review the manager, next run, and status
+            columns.
+          </p>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[760px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Task</TableHead>
+                  <TableHead>Frequency</TableHead>
+                  <TableHead>Manager</TableHead>
+                  <TableHead>Next run</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(row => (
+                  <TableRow key={row.task.id}>
+                    <TableCell className="font-medium text-slate-800">
+                      {row.departmentName}
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium text-slate-800">
+                        {row.task.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {row.task.category}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {row.task.frequency}
+                        {row.task.recurrenceRule?.startsWith("weekly:")
+                          ? ` · ${row.task.recurrenceRule.split(":")[1]}`
+                          : ""}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-slate-600">
+                      {row.ownerName ?? "Department queue"}
+                    </TableCell>
+                    <TableCell className="text-slate-600">
+                      {row.nextRunAt
+                        ? new Date(row.nextRunAt).toLocaleString()
+                        : "One-time assignment"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          row.task.active
+                            ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-100"
+                        }
+                      >
+                        {row.task.active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="py-10 text-center text-sm text-slate-500"
+                    >
+                      No matching WhatsApp task schedules. Add a daily, weekly,
+                      or monthly plan to begin.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
 }

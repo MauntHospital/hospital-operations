@@ -68,10 +68,7 @@
       "indexes": {
         "audit_entity_idx": {
           "name": "audit_entity_idx",
-          "columns": [
-            "entityType",
-            "entityId"
-          ],
+          "columns": ["entityType", "entityId"],
           "isUnique": false
         }
       },
@@ -79,9 +76,7 @@
       "compositePrimaryKeys": {
         "auditLogs_id": {
           "name": "auditLogs_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -144,9 +139,7 @@
       "indexes": {
         "department_point_event_department_idx": {
           "name": "department_point_event_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         }
       },
@@ -154,17 +147,13 @@
       "compositePrimaryKeys": {
         "departmentPointEvents_id": {
           "name": "departmentPointEvents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "departmentPointEvents_dispatchId_unique": {
           "name": "departmentPointEvents_dispatchId_unique",
-          "columns": [
-            "dispatchId"
-          ]
+          "columns": ["dispatchId"]
         }
       },
       "checkConstraint": {}
@@ -228,10 +217,7 @@
       "indexes": {
         "staffing_target_department_shift_unique": {
           "name": "staffing_target_department_shift_unique",
-          "columns": [
-            "departmentId",
-            "shift"
-          ],
+          "columns": ["departmentId", "shift"],
           "isUnique": true
         }
       },
@@ -239,9 +225,7 @@
       "compositePrimaryKeys": {
         "departmentStaffingTargets_id": {
           "name": "departmentStaffingTargets_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -316,17 +300,13 @@
       "compositePrimaryKeys": {
         "departments_id": {
           "name": "departments_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "departments_code_unique": {
           "name": "departments_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -416,9 +396,7 @@
       "indexes": {
         "roster_date_idx": {
           "name": "roster_date_idx",
-          "columns": [
-            "dutyDate"
-          ],
+          "columns": ["dutyDate"],
           "isUnique": false
         }
       },
@@ -426,9 +404,7 @@
       "compositePrimaryKeys": {
         "dutyRosters_id": {
           "name": "dutyRosters_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -605,9 +581,7 @@
       "indexes": {
         "equipment_department_idx": {
           "name": "equipment_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         }
       },
@@ -615,17 +589,13 @@
       "compositePrimaryKeys": {
         "equipment_id": {
           "name": "equipment_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "equipment_equipmentCode_unique": {
           "name": "equipment_equipmentCode_unique",
-          "columns": [
-            "equipmentCode"
-          ]
+          "columns": ["equipmentCode"]
         }
       },
       "checkConstraint": {}
@@ -696,9 +666,7 @@
       "compositePrimaryKeys": {
         "equipmentMaintenance_id": {
           "name": "equipmentMaintenance_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -773,9 +741,7 @@
       "compositePrimaryKeys": {
         "escalationRules_id": {
           "name": "escalationRules_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -867,9 +833,7 @@
       "indexes": {
         "expiry_date_idx": {
           "name": "expiry_date_idx",
-          "columns": [
-            "expiryDate"
-          ],
+          "columns": ["expiryDate"],
           "isUnique": false
         }
       },
@@ -877,9 +841,7 @@
       "compositePrimaryKeys": {
         "expiryItems_id": {
           "name": "expiryItems_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1011,9 +973,7 @@
       "compositePrimaryKeys": {
         "inventory_id": {
           "name": "inventory_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1064,9 +1024,7 @@
       "compositePrimaryKeys": {
         "issueComments_id": {
           "name": "issueComments_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1266,16 +1224,12 @@
       "indexes": {
         "issue_department_idx": {
           "name": "issue_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         },
         "issue_status_idx": {
           "name": "issue_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -1283,17 +1237,13 @@
       "compositePrimaryKeys": {
         "issues_id": {
           "name": "issues_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "issues_code_unique": {
           "name": "issues_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -1350,9 +1300,7 @@
       "compositePrimaryKeys": {
         "locations_id": {
           "name": "locations_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1503,23 +1451,17 @@
       "indexes": {
         "management_action_department_idx": {
           "name": "management_action_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         },
         "management_action_status_idx": {
           "name": "management_action_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "management_action_due_idx": {
           "name": "management_action_due_idx",
-          "columns": [
-            "dueAt"
-          ],
+          "columns": ["dueAt"],
           "isUnique": false
         }
       },
@@ -1527,9 +1469,7 @@
       "compositePrimaryKeys": {
         "managementActions_id": {
           "name": "managementActions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1597,17 +1537,13 @@
       "compositePrimaryKeys": {
         "notificationRules_id": {
           "name": "notificationRules_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "notificationRules_eventType_unique": {
           "name": "notificationRules_eventType_unique",
-          "columns": [
-            "eventType"
-          ]
+          "columns": ["eventType"]
         }
       },
       "checkConstraint": {}
@@ -1690,9 +1626,7 @@
       "indexes": {
         "notification_recipient_idx": {
           "name": "notification_recipient_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -1700,9 +1634,7 @@
       "compositePrimaryKeys": {
         "notifications_id": {
           "name": "notifications_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1776,17 +1708,13 @@
       "compositePrimaryKeys": {
         "operationalIndicatorRules_id": {
           "name": "operationalIndicatorRules_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "operationalIndicatorRules_code_unique": {
           "name": "operationalIndicatorRules_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -1841,9 +1769,7 @@
       "indexes": {
         "recurring_job_idx": {
           "name": "recurring_job_idx",
-          "columns": [
-            "schedule_cron_task_uid"
-          ],
+          "columns": ["schedule_cron_task_uid"],
           "isUnique": false
         }
       },
@@ -1851,17 +1777,13 @@
       "compositePrimaryKeys": {
         "recurringTasks_id": {
           "name": "recurringTasks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "recurringTasks_taskId_unique": {
           "name": "recurringTasks_taskId_unique",
-          "columns": [
-            "taskId"
-          ]
+          "columns": ["taskId"]
         }
       },
       "checkConstraint": {}
@@ -2004,16 +1926,12 @@
       "indexes": {
         "risk_department_idx": {
           "name": "risk_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         },
         "risk_status_idx": {
           "name": "risk_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -2021,17 +1939,13 @@
       "compositePrimaryKeys": {
         "risks_id": {
           "name": "risks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "risks_code_unique": {
           "name": "risks_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -2145,9 +2059,7 @@
       "compositePrimaryKeys": {
         "shiftHandovers_id": {
           "name": "shiftHandovers_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2222,23 +2134,17 @@
       "compositePrimaryKeys": {
         "staffCredentials_id": {
           "name": "staffCredentials_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "staffCredentials_userId_unique": {
           "name": "staffCredentials_userId_unique",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         },
         "staffCredentials_username_unique": {
           "name": "staffCredentials_username_unique",
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "checkConstraint": {}
@@ -2303,17 +2209,13 @@
       "compositePrimaryKeys": {
         "staffProfiles_id": {
           "name": "staffProfiles_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "staffProfiles_userId_unique": {
           "name": "staffProfiles_userId_unique",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       },
       "checkConstraint": {}
@@ -2404,23 +2306,17 @@
       "indexes": {
         "assignment_assignee_idx": {
           "name": "assignment_assignee_idx",
-          "columns": [
-            "assignedUserId"
-          ],
+          "columns": ["assignedUserId"],
           "isUnique": false
         },
         "assignment_due_idx": {
           "name": "assignment_due_idx",
-          "columns": [
-            "dueAt"
-          ],
+          "columns": ["dueAt"],
           "isUnique": false
         },
         "assignment_task_idx": {
           "name": "assignment_task_idx",
-          "columns": [
-            "taskId"
-          ],
+          "columns": ["taskId"],
           "isUnique": false
         }
       },
@@ -2428,9 +2324,7 @@
       "compositePrimaryKeys": {
         "taskAssignments_id": {
           "name": "taskAssignments_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2509,10 +2403,7 @@
       "indexes": {
         "assignment_checklist_unique": {
           "name": "assignment_checklist_unique",
-          "columns": [
-            "assignmentId",
-            "checklistId"
-          ],
+          "columns": ["assignmentId", "checklistId"],
           "isUnique": true
         }
       },
@@ -2520,9 +2411,7 @@
       "compositePrimaryKeys": {
         "taskChecklistResults_id": {
           "name": "taskChecklistResults_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2596,9 +2485,7 @@
       "compositePrimaryKeys": {
         "taskChecklists_id": {
           "name": "taskChecklists_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2692,17 +2579,13 @@
       "compositePrimaryKeys": {
         "taskCompletions_id": {
           "name": "taskCompletions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "taskCompletions_assignmentId_unique": {
           "name": "taskCompletions_assignmentId_unique",
-          "columns": [
-            "assignmentId"
-          ]
+          "columns": ["assignmentId"]
         }
       },
       "checkConstraint": {}
@@ -2771,16 +2654,12 @@
       "indexes": {
         "task_lifecycle_assignment_idx": {
           "name": "task_lifecycle_assignment_idx",
-          "columns": [
-            "assignmentId"
-          ],
+          "columns": ["assignmentId"],
           "isUnique": false
         },
         "task_lifecycle_dispatch_idx": {
           "name": "task_lifecycle_dispatch_idx",
-          "columns": [
-            "dispatchId"
-          ],
+          "columns": ["dispatchId"],
           "isUnique": false
         }
       },
@@ -2788,9 +2667,7 @@
       "compositePrimaryKeys": {
         "taskLifecycleEvents_id": {
           "name": "taskLifecycleEvents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2850,17 +2727,13 @@
       "compositePrimaryKeys": {
         "taskScoringRules_id": {
           "name": "taskScoringRules_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "taskScoringRules_priority_unique": {
           "name": "taskScoringRules_priority_unique",
-          "columns": [
-            "priority"
-          ]
+          "columns": ["priority"]
         }
       },
       "checkConstraint": {}
@@ -3085,16 +2958,12 @@
       "indexes": {
         "task_department_idx": {
           "name": "task_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         },
         "task_active_idx": {
           "name": "task_active_idx",
-          "columns": [
-            "active"
-          ],
+          "columns": ["active"],
           "isUnique": false
         }
       },
@@ -3102,9 +2971,7 @@
       "compositePrimaryKeys": {
         "tasks_id": {
           "name": "tasks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3187,17 +3054,13 @@
       "compositePrimaryKeys": {
         "users_id": {
           "name": "users_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "users_openId_unique": {
           "name": "users_openId_unique",
-          "columns": [
-            "openId"
-          ]
+          "columns": ["openId"]
         }
       },
       "checkConstraint": {}
@@ -3283,9 +3146,7 @@
       "indexes": {
         "whatsapp_template_department_idx": {
           "name": "whatsapp_template_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         }
       },
@@ -3293,9 +3154,7 @@
       "compositePrimaryKeys": {
         "whatsappMessageTemplates_id": {
           "name": "whatsappMessageTemplates_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3455,16 +3314,12 @@
       "indexes": {
         "whatsapp_dispatch_department_idx": {
           "name": "whatsapp_dispatch_department_idx",
-          "columns": [
-            "departmentId"
-          ],
+          "columns": ["departmentId"],
           "isUnique": false
         },
         "whatsapp_dispatch_status_idx": {
           "name": "whatsapp_dispatch_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -3472,17 +3327,13 @@
       "compositePrimaryKeys": {
         "whatsappTaskDispatches_id": {
           "name": "whatsappTaskDispatches_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "whatsappTaskDispatches_assignmentId_unique": {
           "name": "whatsappTaskDispatches_assignmentId_unique",
-          "columns": [
-            "assignmentId"
-          ]
+          "columns": ["assignmentId"]
         }
       },
       "checkConstraint": {}

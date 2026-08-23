@@ -1,26 +1,73 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { filterAndSortOperationalTasks } from "@/lib/taskQueue";
 import { getRosterAvailability, getRosterHandover } from "@/lib/rosterStatus";
 import { groupMyDayTasks, type MyDayTaskGroup } from "@/lib/myDayGroups";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, ArrowUpRight, Bell, CalendarClock, CheckCircle2, ClipboardCheck, Clock3, FileBarChart, HeartPulse, MessageCircleMore, PackageSearch, Plus, ShieldAlert, Stethoscope, Trophy, Wrench } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Bell,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  FileBarChart,
+  HeartPulse,
+  MessageCircleMore,
+  PackageSearch,
+  Plus,
+  ShieldAlert,
+  Stethoscope,
+  Trophy,
+  Wrench,
+} from "lucide-react";
 import React, { useMemo, useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { Link, useRoute } from "wouter";
 import { toast } from "sonner";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -35,28 +82,140 @@ const toneStyles: Record<Tone, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.replaceAll("_", " ");
-  const tone: Tone = ["completed", "working", "safe", "present", "resolved", "closed", "available", "normal"].includes(status) ? "success" : ["overdue", "critical", "expired", "damaged", "out_of_service", "missing", "escalated"].includes(status) ? "danger" : ["pending_approval", "under_maintenance", "low_stock", "within_30_days", "late", "attention", "high"].includes(status) ? "warning" : ["in_progress", "assigned", "within_60_days"].includes(status) ? "info" : "neutral";
-  return <Badge variant="outline" className={cn("rounded-full px-2.5 py-0.5 font-medium capitalize", toneStyles[tone])}>{normalized}</Badge>;
+  const tone: Tone = [
+    "completed",
+    "working",
+    "safe",
+    "present",
+    "resolved",
+    "closed",
+    "available",
+    "normal",
+  ].includes(status)
+    ? "success"
+    : [
+          "overdue",
+          "critical",
+          "expired",
+          "damaged",
+          "out_of_service",
+          "missing",
+          "escalated",
+        ].includes(status)
+      ? "danger"
+      : [
+            "pending_approval",
+            "under_maintenance",
+            "low_stock",
+            "within_30_days",
+            "late",
+            "attention",
+            "high",
+          ].includes(status)
+        ? "warning"
+        : ["in_progress", "assigned", "within_60_days"].includes(status)
+          ? "info"
+          : "neutral";
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "rounded-full px-2.5 py-0.5 font-medium capitalize",
+        toneStyles[tone]
+      )}
+    >
+      {normalized}
+    </Badge>
+  );
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
-  const tone: Tone = priority === "critical" ? "danger" : priority === "high" ? "warning" : priority === "medium" ? "info" : "neutral";
-  return <Badge variant="outline" className={cn("rounded-full px-2.5 py-0.5 font-medium capitalize", toneStyles[tone])}>{priority}</Badge>;
+  const tone: Tone =
+    priority === "critical"
+      ? "danger"
+      : priority === "high"
+        ? "warning"
+        : priority === "medium"
+          ? "info"
+          : "neutral";
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "rounded-full px-2.5 py-0.5 font-medium capitalize",
+        toneStyles[tone]
+      )}
+    >
+      {priority}
+    </Badge>
+  );
 }
 
-function RosterIndicator({ label, detail, tone = "neutral" }: { label: string; detail: string; tone?: Tone }) {
-  const dot = tone === "success" ? "bg-emerald-500" : tone === "warning" ? "bg-amber-400" : tone === "danger" ? "bg-rose-500" : tone === "info" ? "bg-sky-500" : "bg-slate-300";
-  return <Tooltip><TooltipTrigger asChild><button type="button" aria-label={`${label}: ${detail}`} className={cn("inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2", toneStyles[tone])}><span className={cn("h-2 w-2 rounded-full", dot)} aria-hidden="true" />{label}</button></TooltipTrigger><TooltipContent side="top" className="max-w-64"><p>{detail}</p></TooltipContent></Tooltip>;
+function RosterIndicator({
+  label,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  detail: string;
+  tone?: Tone;
+}) {
+  const dot =
+    tone === "success"
+      ? "bg-emerald-500"
+      : tone === "warning"
+        ? "bg-amber-400"
+        : tone === "danger"
+          ? "bg-rose-500"
+          : tone === "info"
+            ? "bg-sky-500"
+            : "bg-slate-300";
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={`${label}: ${detail}`}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2",
+            toneStyles[tone]
+          )}
+        >
+          <span
+            className={cn("h-2 w-2 rounded-full", dot)}
+            aria-hidden="true"
+          />
+          {label}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-64">
+        <p>{detail}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
-function formatDate(value: Date | string | null | undefined, includeTime = false) {
+function formatDate(
+  value: Date | string | null | undefined,
+  includeTime = false
+) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", ...(includeTime ? { hour: "numeric", minute: "2-digit" } : {}) }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(includeTime ? { hour: "numeric", minute: "2-digit" } : {}),
+  }).format(new Date(value));
 }
 
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
-  const content = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
-  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const content = rows
+    .map(row =>
+      row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")
+    )
+    .join("\n");
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "text/csv;charset=utf-8" })
+  );
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -64,21 +223,220 @@ function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
   URL.revokeObjectURL(url);
 }
 
-function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
-  return <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">{eyebrow}</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{title}</h1><p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p></div>{action}</section>;
+function PageHeading({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">
+          {eyebrow}
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+          {title}
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p>
+      </div>
+      {action}
+    </section>
+  );
 }
 
-function MetricCard({ label, value, hint, icon: Icon, tone = "teal" }: { label: string; value: number | string; hint: string; icon: typeof ClipboardCheck; tone?: "teal" | "orange" | "rose" | "sky" }) {
-  const colors = { teal: "bg-teal-50 text-teal-700", orange: "bg-orange-50 text-orange-700", rose: "bg-rose-50 text-rose-700", sky: "bg-sky-50 text-sky-700" };
-  return <Card className="border-slate-200 shadow-sm"><CardContent className="p-4"><div className="flex items-start justify-between"><div><p className="text-sm font-medium text-slate-500">{label}</p><p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-500">{hint}</p></div><div className={cn("rounded-xl p-2.5", colors[tone])}><Icon className="h-5 w-5" /></div></div></CardContent></Card>;
+function MetricCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone = "teal",
+}: {
+  label: string;
+  value: number | string;
+  hint: string;
+  icon: typeof ClipboardCheck;
+  tone?: "teal" | "orange" | "rose" | "sky";
+}) {
+  const colors = {
+    teal: "bg-teal-50 text-teal-700",
+    orange: "bg-orange-50 text-orange-700",
+    rose: "bg-rose-50 text-rose-700",
+    sky: "bg-sky-50 text-sky-700",
+  };
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">{label}</p>
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+              {value}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{hint}</p>
+          </div>
+          <div className={cn("rounded-xl p-2.5", colors[tone])}>
+            <Icon className="h-5 w-5" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-function LoadingPanel() { return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-2xl bg-slate-100" />)}</div>; }
+function LoadingPanel() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }, (_, index) => (
+        <div
+          key={index}
+          className="h-32 animate-pulse rounded-2xl bg-slate-100"
+        />
+      ))}
+    </div>
+  );
+}
 
 function CommandCenterSummary({ data }: { data: any }) {
-  const label = data.operationalStatus === "critical" ? "CRITICAL" : data.operationalStatus === "attention_required" ? "ATTENTION REQUIRED" : "NORMAL";
-  const tone = data.operationalStatus === "critical" ? "border-rose-200 bg-rose-50" : data.operationalStatus === "attention_required" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50";
-  return <Card className={cn("mt-6 shadow-sm", tone)}><CardHeader className="gap-3 md:flex-row md:items-start md:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Command-center status</p><CardTitle className="mt-1 text-xl text-slate-950">Hospital status: {label}</CardTitle><CardDescription className="mt-1 max-w-2xl">Calculated from configured task, issue, equipment, inventory, staffing, and management-action thresholds. This is an operational attention indicator, not an automated clinical decision.</CardDescription></div><div className="flex flex-wrap gap-2">{data.indicatorStates?.filter((indicator: any) => indicator.state !== "normal").map((indicator: any) => <Badge key={indicator.code} variant="outline" className={indicator.state === "critical" ? "border-rose-200 bg-white text-rose-700" : "border-amber-200 bg-white text-amber-800"}>{indicator.label}: {indicator.value}</Badge>)}</div></CardHeader><CardContent><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><MetricCard label="No-reply tasks" value={data.taskCounts.noReply} hint={`${data.taskCounts.awaitingReply} awaiting reply`} icon={MessageCircleMore} tone="orange" /><MetricCard label="Equipment out" value={data.equipmentCounts.outOfService} hint={`${data.equipmentCounts.maintenanceOverdue} maintenance overdue`} icon={Wrench} tone="rose" /><MetricCard label="Stock-outs" value={data.inventoryCounts.stockOuts} hint={`${data.inventoryCounts.lowStock} low-stock items`} icon={PackageSearch} tone="orange" /><MetricCard label="Staffing shortfalls" value={data.staffingCounts.shortages} hint={`${data.staffingCounts.present}/${data.staffingCounts.required} planned coverage`} icon={Stethoscope} tone="rose" /><MetricCard label="Overdue actions" value={data.managementActionCounts.overdue} hint={`${data.handoverCounts.unresolved} unresolved handovers`} icon={AlertTriangle} tone="rose" /></div><div className="mt-5 border-t border-slate-200/80 pt-4"><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base">What needs my attention?</CardTitle><CardDescription className="mt-1">Prioritized operational risks from connected hospital modules.</CardDescription></div><Link href="/reports" className="text-sm font-medium text-teal-700 hover:text-teal-900">Review trends</Link></div><div className="mt-3 grid gap-2 lg:grid-cols-2">{data.attentionItems?.map((item: any) => <Link href={item.route} key={item.key} className="rounded-xl border border-white/80 bg-white/80 p-3 transition-colors hover:bg-white"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><PriorityBadge priority={item.severity} /><p className="truncate text-sm font-semibold text-slate-800">{item.title}</p></div><p className="mt-1 text-xs text-slate-500">Owner: {item.owner} · {item.detail}</p></div><ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /></div></Link>)}{!data.attentionItems?.length && <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-600">No active attention items meet the configured thresholds.</p>}</div></div></CardContent></Card>;
+  const label =
+    data.operationalStatus === "critical"
+      ? "CRITICAL"
+      : data.operationalStatus === "attention_required"
+        ? "ATTENTION REQUIRED"
+        : "NORMAL";
+  const tone =
+    data.operationalStatus === "critical"
+      ? "border-rose-200 bg-rose-50"
+      : data.operationalStatus === "attention_required"
+        ? "border-amber-200 bg-amber-50"
+        : "border-emerald-200 bg-emerald-50";
+  return (
+    <Card className={cn("mt-6 shadow-sm", tone)}>
+      <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
+            Command-center status
+          </p>
+          <CardTitle className="mt-1 text-xl text-slate-950">
+            Hospital status: {label}
+          </CardTitle>
+          <CardDescription className="mt-1 max-w-2xl">
+            Calculated from configured task, issue, equipment, inventory,
+            staffing, and management-action thresholds. This is an operational
+            attention indicator, not an automated clinical decision.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {data.indicatorStates
+            ?.filter((indicator: any) => indicator.state !== "normal")
+            .map((indicator: any) => (
+              <Badge
+                key={indicator.code}
+                variant="outline"
+                className={
+                  indicator.state === "critical"
+                    ? "border-rose-200 bg-white text-rose-700"
+                    : "border-amber-200 bg-white text-amber-800"
+                }
+              >
+                {indicator.label}: {indicator.value}
+              </Badge>
+            ))}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <MetricCard
+            label="No-reply tasks"
+            value={data.taskCounts.noReply}
+            hint={`${data.taskCounts.awaitingReply} awaiting reply`}
+            icon={MessageCircleMore}
+            tone="orange"
+          />
+          <MetricCard
+            label="Equipment out"
+            value={data.equipmentCounts.outOfService}
+            hint={`${data.equipmentCounts.maintenanceOverdue} maintenance overdue`}
+            icon={Wrench}
+            tone="rose"
+          />
+          <MetricCard
+            label="Stock-outs"
+            value={data.inventoryCounts.stockOuts}
+            hint={`${data.inventoryCounts.lowStock} low-stock items`}
+            icon={PackageSearch}
+            tone="orange"
+          />
+          <MetricCard
+            label="Staffing shortfalls"
+            value={data.staffingCounts.shortages}
+            hint={`${data.staffingCounts.present}/${data.staffingCounts.required} planned coverage`}
+            icon={Stethoscope}
+            tone="rose"
+          />
+          <MetricCard
+            label="Overdue actions"
+            value={data.managementActionCounts.overdue}
+            hint={`${data.handoverCounts.unresolved} unresolved handovers`}
+            icon={AlertTriangle}
+            tone="rose"
+          />
+        </div>
+        <div className="mt-5 border-t border-slate-200/80 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">
+                What needs my attention?
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Prioritized operational risks from connected hospital modules.
+              </CardDescription>
+            </div>
+            <Link
+              href="/reports"
+              className="text-sm font-medium text-teal-700 hover:text-teal-900"
+            >
+              Review trends
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+            {data.attentionItems?.map((item: any) => (
+              <Link
+                href={item.route}
+                key={item.key}
+                className="rounded-xl border border-white/80 bg-white/80 p-3 transition-colors hover:bg-white"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <PriorityBadge priority={item.severity} />
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {item.title}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Owner: {item.owner} · {item.detail}
+                    </p>
+                  </div>
+                  <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                </div>
+              </Link>
+            ))}
+            {!data.attentionItems?.length && (
+              <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-600">
+                No active attention items meet the configured thresholds.
+              </p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ControlTower() {
@@ -88,26 +446,580 @@ function ControlTower() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("due_soon");
-  const completeOverdue = trpc.operations.taskManagerDirectComplete.useMutation({ onSuccess: () => { toast.success("Overdue task recorded as completed by the operations manager."); utils.operations.dashboard.invalidate(); utils.operations.whatsappTaskRegister.invalidate(); utils.operations.reports.invalidate(); } });
-  const whatsappTodayAssignments = dashboard.data?.whatsappTodayAssignments ?? [];
-  const filteredTasks = useMemo(() => filterAndSortOperationalTasks(whatsappTodayAssignments, { priorityFilter, statusFilter, sortBy }), [whatsappTodayAssignments, priorityFilter, statusFilter, sortBy]);
+  const completeOverdue = trpc.operations.taskManagerDirectComplete.useMutation(
+    {
+      onSuccess: () => {
+        toast.success(
+          "Overdue task recorded as completed by the operations manager."
+        );
+        utils.operations.dashboard.invalidate();
+        utils.operations.whatsappTaskRegister.invalidate();
+        utils.operations.reports.invalidate();
+      },
+    }
+  );
+  const whatsappTodayAssignments =
+    dashboard.data?.whatsappTodayAssignments ?? [];
+  const filteredTasks = useMemo(
+    () =>
+      filterAndSortOperationalTasks(whatsappTodayAssignments, {
+        priorityFilter,
+        statusFilter,
+        sortBy,
+      }),
+    [whatsappTodayAssignments, priorityFilter, statusFilter, sortBy]
+  );
   if (dashboard.isLoading || !dashboard.data) return <LoadingPanel />;
   const data = dashboard.data;
-  const overall = data.operationalStatus === "critical" ? "Critical operational status" : data.operationalStatus === "attention_required" ? "Attention required" : "Operations normal";
-  return <><CommandCenterSummary data={data} />
-    <PageHeading eyebrow="Live operating picture" title="Hospital Operations Control Tower" description="A real-time view of tasks, incidents, staffing, inventory, and equipment readiness across the hospital." action={user?.role === "super_admin" ? <Link href="/department-schedules"><Button className="bg-teal-700 hover:bg-teal-800"><Plus className="mr-2 h-4 w-4" />Manage task schedules</Button></Link> : undefined} />
-    <Card className="mb-6 overflow-hidden border-teal-900 bg-[linear-gradient(115deg,#0b3d45,#0b6a6a)] text-white shadow-md"><CardContent className="relative p-5 sm:p-6"><div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-teal-300/10 blur-2xl" /><div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-teal-100"><HeartPulse className="h-5 w-5" /><span className="text-sm font-medium">Hospital status</span></div><h2 className="mt-2 text-2xl font-semibold">{overall}</h2><p className="mt-1 max-w-xl text-sm text-teal-100">Review overdue checks, critical issues, and operating constraints before the next escalation window.</p></div><div className="grid grid-cols-3 gap-5"><div><p className="text-2xl font-semibold">{data.taskCounts.completed}</p><p className="text-xs text-teal-100">Tasks completed</p></div><div><p className="text-2xl font-semibold">{data.issueCounts.open}</p><p className="text-xs text-teal-100">Open issues</p></div><div><p className="text-2xl font-semibold">{data.equipmentCounts.working}/{data.equipmentCounts.total}</p><p className="text-xs text-teal-100">Equipment working</p></div></div></div></CardContent></Card>
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Active task queue" value={data.taskCounts.total} hint={`${data.taskCounts.scheduledToday} scheduled today · ${data.taskCounts.overdue} overdue`} icon={ClipboardCheck} tone="teal" /><MetricCard label="Pending review" value={data.taskCounts.pending} hint="In progress or awaiting approval" icon={Clock3} tone="sky" /><MetricCard label="Overdue actions" value={data.taskCounts.overdue} hint="Escalation rules apply" icon={AlertTriangle} tone="rose" /><MetricCard label="Critical issues" value={data.issueCounts.critical} hint={`${data.issueCounts.high} high priority open`} icon={ShieldAlert} tone="orange" /></div>
-    {user && ["super_admin", "hospital_admin", "department_head", "supervisor"].includes(user.role) && <Card className="mt-6 border-slate-200 shadow-sm"><CardHeader className="flex flex-row items-center justify-between space-y-0"><div><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-600" /><CardTitle className="text-base">Department accountability</CardTitle></div><CardDescription className="mt-1">Meeting-ready scorecard for manual WhatsApp task follow-up. Scores start at 100 each month.</CardDescription></div><Link href="/whatsapp-tasks" className="text-sm font-medium text-teal-700 hover:text-teal-900">Open task register</Link></CardHeader><CardContent><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{data.departmentAccountability.map(scorecard => <div key={scorecard.departmentId} className={cn("rounded-xl border p-3.5", scorecard.score < 95 ? "border-rose-200 bg-rose-50/60" : "border-emerald-200 bg-emerald-50/60")}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">{scorecard.departmentName}</p><p className="mt-1 text-xs text-slate-500">{scorecard.completed}/{scorecard.dispatched} replies completed</p></div><p className={cn("text-xl font-semibold", scorecard.score < 95 ? "text-rose-700" : "text-emerald-700")}>{scorecard.score}</p></div><div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-white/80 px-2 py-1 text-slate-600">{scorecard.awaitingReply} awaiting reply</span>{scorecard.pending > 0 && <span className="rounded-full bg-rose-100 px-2 py-1 font-medium text-rose-700">{scorecard.pending} pending</span>}{scorecard.pointsLost > 0 && <span className="rounded-full bg-rose-100 px-2 py-1 font-medium text-rose-700">−{scorecard.pointsLost} points</span>}</div></div>)}</div></CardContent></Card>}
-    <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]"><Card className="border-slate-200 shadow-sm"><CardHeader className="flex flex-row items-center justify-between space-y-0"><div><CardTitle className="text-base">Department readiness</CardTitle><CardDescription>Completion, overdue checks, and open issues by service line.</CardDescription></div><Link href="/reports" className="text-sm font-medium text-teal-700 hover:text-teal-900">View reports</Link></CardHeader><CardContent className="space-y-4">{data.departmentHealth.map(department => <div key={department.id} className="rounded-xl border border-slate-100 p-3.5"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><span className={cn("h-2.5 w-2.5 rounded-full", department.health === "normal" ? "bg-emerald-500" : department.health === "attention" ? "bg-rose-500" : "bg-amber-400")} /><span className="truncate text-sm font-semibold text-slate-800">{department.name}</span></div><span className="text-xs text-slate-500">{department.completed}/{department.total} complete</span></div><Progress className="mt-3 h-1.5" value={department.total ? (department.completed / department.total) * 100 : 0} /><div className="mt-2 flex gap-3 text-xs text-slate-500"><span>{department.overdue} overdue</span><span>{department.activeIssues} open issues</span></div></div>)}</CardContent></Card>
-      <Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Operational alerts</CardTitle><CardDescription>Newest notifications across departments.</CardDescription></CardHeader><CardContent className="space-y-3">{data.notifications.map(notification => <div className="flex gap-3 rounded-xl bg-slate-50 p-3" key={notification.id}><div className="mt-0.5 rounded-lg bg-teal-100 p-1.5 text-teal-700"><Bell className="h-3.5 w-3.5" /></div><div className="min-w-0"><p className="text-sm font-medium text-slate-800">{notification.title}</p><p className="mt-0.5 text-xs leading-relaxed text-slate-500">{notification.body}</p></div></div>)}</CardContent></Card></div>
-    {data.overdueManagerAssignments.length > 0 && <Card className="mt-6 border-amber-200 bg-amber-50/50 shadow-sm"><CardHeader className="gap-3 md:flex-row md:items-start md:justify-between"><div><CardTitle className="text-base text-amber-950">Overdue tasks awaiting manager review</CardTitle><CardDescription className="mt-1 max-w-3xl">These assignments were never sent through WhatsApp. Review each one, then use <strong>Mark completed</strong> only when you have verified it was completed. WhatsApp-distributed tasks remain protected in their own lifecycle.</CardDescription></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">{data.overdueManagerAssignments.length} to review</span></CardHeader><CardContent><div className="space-y-3 md:hidden">{data.overdueManagerAssignments.map(task => <div key={task.id} className="rounded-xl border border-amber-200 bg-white p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold text-slate-800">{task.taskName}</p><p className="mt-1 text-xs text-slate-500">{task.departmentName} · {formatDate(task.dueAt, true)}</p></div><PriorityBadge priority={task.priority} /></div><Button size="sm" className="mt-3 w-full bg-teal-700 hover:bg-teal-800" disabled={completeOverdue.isPending} onClick={() => { const note = window.prompt("Completion note", "Verified and completed during overdue-task review."); if (note?.trim()) completeOverdue.mutate({ assignmentId: task.id, notes: note.trim() }); }}>Mark completed</Button></div>)}</div><div className="hidden overflow-x-auto md:block"><Table className="min-w-[760px]"><TableHeader><TableRow><TableHead>Task</TableHead><TableHead>Department</TableHead><TableHead>Due</TableHead><TableHead>Priority</TableHead><TableHead className="text-right">Resolution</TableHead></TableRow></TableHeader><TableBody>{data.overdueManagerAssignments.map(task => <TableRow key={task.id}><TableCell className="font-medium text-slate-800">{task.taskName}</TableCell><TableCell className="text-slate-500">{task.departmentName}</TableCell><TableCell className="text-slate-500">{formatDate(task.dueAt, true)}</TableCell><TableCell><PriorityBadge priority={task.priority} /></TableCell><TableCell className="text-right"><Button size="sm" className="bg-teal-700 hover:bg-teal-800" disabled={completeOverdue.isPending} onClick={() => { const note = window.prompt("Completion note", "Verified and completed during overdue-task review."); if (note?.trim()) completeOverdue.mutate({ assignmentId: task.id, notes: note.trim() }); }}>Mark completed</Button></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>}
-    <Card className="mt-6 border-slate-200 shadow-sm"><CardHeader className="gap-4 xl:flex-row xl:items-start xl:justify-between"><div><CardTitle className="text-base">Today's WhatsApp task workflow</CardTitle><CardDescription>This is the same Daily, Weekly, and Monthly task queue shown in the WhatsApp register. Direct manager work and manual department distribution stay visible in one place.</CardDescription></div><Link href="/whatsapp-tasks" className="shrink-0 text-sm font-medium text-teal-700 hover:text-teal-900">Open manager task register</Link></CardHeader><CardContent><div className="mb-4 grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-3"><div><Label className="text-xs text-slate-600">Priority</Label><Select value={priorityFilter} onValueChange={setPriorityFilter}><SelectTrigger aria-label="Filter tasks by priority" className="mt-1.5 bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All priorities</SelectItem><SelectItem value="critical">Critical</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="low">Low</SelectItem></SelectContent></Select></div><div><Label className="text-xs text-slate-600">Task state</Label><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger aria-label="Filter tasks by overdue status" className="mt-1.5 bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All task states</SelectItem><SelectItem value="overdue">Overdue only</SelectItem><SelectItem value="active">Not overdue</SelectItem></SelectContent></Select></div><div><Label className="text-xs text-slate-600">Sort tasks</Label><Select value={sortBy} onValueChange={setSortBy}><SelectTrigger aria-label="Sort operational tasks" className="mt-1.5 bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="due_soon">Due soonest</SelectItem><SelectItem value="overdue_first">Overdue first</SelectItem><SelectItem value="priority">Priority, highest first</SelectItem></SelectContent></Select></div></div><div className="mb-3 flex items-center justify-between text-xs text-slate-500"><span>{filteredTasks.length} task{filteredTasks.length === 1 ? "" : "s"} in view</span>{(priorityFilter !== "all" || statusFilter !== "all" || sortBy !== "due_soon") && <Button variant="ghost" size="sm" className="h-7 px-2 text-teal-700 hover:bg-teal-50 hover:text-teal-900" onClick={() => { setPriorityFilter("all"); setStatusFilter("all"); setSortBy("due_soon"); }}>Reset view</Button>}</div><TaskTable tasks={filteredTasks} /></CardContent></Card>
-  </>;
+  const overall =
+    data.operationalStatus === "critical"
+      ? "Critical operational status"
+      : data.operationalStatus === "attention_required"
+        ? "Attention required"
+        : "Operations normal";
+  return (
+    <>
+      <CommandCenterSummary data={data} />
+      <PageHeading
+        eyebrow="Live operating picture"
+        title="Hospital Operations Control Tower"
+        description="A real-time view of tasks, incidents, staffing, inventory, and equipment readiness across the hospital."
+        action={
+          user?.role === "super_admin" ? (
+            <Link href="/department-schedules">
+              <Button className="bg-teal-700 hover:bg-teal-800">
+                <Plus className="mr-2 h-4 w-4" />
+                Manage task schedules
+              </Button>
+            </Link>
+          ) : undefined
+        }
+      />
+      <Card className="mb-6 overflow-hidden border-teal-900 bg-[linear-gradient(115deg,#0b3d45,#0b6a6a)] text-white shadow-md">
+        <CardContent className="relative p-5 sm:p-6">
+          <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-teal-300/10 blur-2xl" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-teal-100">
+                <HeartPulse className="h-5 w-5" />
+                <span className="text-sm font-medium">Hospital status</span>
+              </div>
+              <h2 className="mt-2 text-2xl font-semibold">{overall}</h2>
+              <p className="mt-1 max-w-xl text-sm text-teal-100">
+                Review overdue checks, critical issues, and operating
+                constraints before the next escalation window.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-5">
+              <div>
+                <p className="text-2xl font-semibold">
+                  {data.taskCounts.completed}
+                </p>
+                <p className="text-xs text-teal-100">Tasks completed</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold">
+                  {data.issueCounts.open}
+                </p>
+                <p className="text-xs text-teal-100">Open issues</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold">
+                  {data.equipmentCounts.working}/{data.equipmentCounts.total}
+                </p>
+                <p className="text-xs text-teal-100">Equipment working</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Active task queue"
+          value={data.taskCounts.total}
+          hint={`${data.taskCounts.scheduledToday} scheduled today · ${data.taskCounts.overdue} overdue`}
+          icon={ClipboardCheck}
+          tone="teal"
+        />
+        <MetricCard
+          label="Pending review"
+          value={data.taskCounts.pending}
+          hint="In progress or awaiting approval"
+          icon={Clock3}
+          tone="sky"
+        />
+        <MetricCard
+          label="Overdue actions"
+          value={data.taskCounts.overdue}
+          hint="Escalation rules apply"
+          icon={AlertTriangle}
+          tone="rose"
+        />
+        <MetricCard
+          label="Critical issues"
+          value={data.issueCounts.critical}
+          hint={`${data.issueCounts.high} high priority open`}
+          icon={ShieldAlert}
+          tone="orange"
+        />
+      </div>
+      {user &&
+        [
+          "super_admin",
+          "hospital_admin",
+          "department_head",
+          "supervisor",
+        ].includes(user.role) && (
+          <Card className="mt-6 border-slate-200 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-amber-600" />
+                  <CardTitle className="text-base">
+                    Department accountability
+                  </CardTitle>
+                </div>
+                <CardDescription className="mt-1">
+                  Meeting-ready scorecard for manual WhatsApp task follow-up.
+                  Scores start at 100 each month.
+                </CardDescription>
+              </div>
+              <Link
+                href="/whatsapp-tasks"
+                className="text-sm font-medium text-teal-700 hover:text-teal-900"
+              >
+                Open task register
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {data.departmentAccountability.map(scorecard => (
+                  <div
+                    key={scorecard.departmentId}
+                    className={cn(
+                      "rounded-xl border p-3.5",
+                      scorecard.score < 95
+                        ? "border-rose-200 bg-rose-50/60"
+                        : "border-emerald-200 bg-emerald-50/60"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {scorecard.departmentName}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {scorecard.completed}/{scorecard.dispatched} replies
+                          completed
+                        </p>
+                      </div>
+                      <p
+                        className={cn(
+                          "text-xl font-semibold",
+                          scorecard.score < 95
+                            ? "text-rose-700"
+                            : "text-emerald-700"
+                        )}
+                      >
+                        {scorecard.score}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-white/80 px-2 py-1 text-slate-600">
+                        {scorecard.awaitingReply} awaiting reply
+                      </span>
+                      {scorecard.pending > 0 && (
+                        <span className="rounded-full bg-rose-100 px-2 py-1 font-medium text-rose-700">
+                          {scorecard.pending} pending
+                        </span>
+                      )}
+                      {scorecard.pointsLost > 0 && (
+                        <span className="rounded-full bg-rose-100 px-2 py-1 font-medium text-rose-700">
+                          −{scorecard.pointsLost} points
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-base">Department readiness</CardTitle>
+              <CardDescription>
+                Completion, overdue checks, and open issues by service line.
+              </CardDescription>
+            </div>
+            <Link
+              href="/reports"
+              className="text-sm font-medium text-teal-700 hover:text-teal-900"
+            >
+              View reports
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {data.departmentHealth.map(department => (
+              <div
+                key={department.id}
+                className="rounded-xl border border-slate-100 p-3.5"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        department.health === "normal"
+                          ? "bg-emerald-500"
+                          : department.health === "attention"
+                            ? "bg-rose-500"
+                            : "bg-amber-400"
+                      )}
+                    />
+                    <span className="truncate text-sm font-semibold text-slate-800">
+                      {department.name}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {department.completed}/{department.total} complete
+                  </span>
+                </div>
+                <Progress
+                  className="mt-3 h-1.5"
+                  value={
+                    department.total
+                      ? (department.completed / department.total) * 100
+                      : 0
+                  }
+                />
+                <div className="mt-2 flex gap-3 text-xs text-slate-500">
+                  <span>{department.overdue} overdue</span>
+                  <span>{department.activeIssues} open issues</span>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Operational alerts</CardTitle>
+            <CardDescription>
+              Newest notifications across departments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.notifications.map(notification => (
+              <div
+                className="flex gap-3 rounded-xl bg-slate-50 p-3"
+                key={notification.id}
+              >
+                <div className="mt-0.5 rounded-lg bg-teal-100 p-1.5 text-teal-700">
+                  <Bell className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    {notification.title}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                    {notification.body}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      {data.overdueManagerAssignments.length > 0 && (
+        <Card className="mt-6 border-amber-200 bg-amber-50/50 shadow-sm">
+          <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle className="text-base text-amber-950">
+                Overdue tasks awaiting manager review
+              </CardTitle>
+              <CardDescription className="mt-1 max-w-3xl">
+                These assignments were never sent through WhatsApp. Review each
+                one, then use <strong>Mark completed</strong> only when you have
+                verified it was completed. WhatsApp-distributed tasks remain
+                protected in their own lifecycle.
+              </CardDescription>
+            </div>
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+              {data.overdueManagerAssignments.length} to review
+            </span>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 md:hidden">
+              {data.overdueManagerAssignments.map(task => (
+                <div
+                  key={task.id}
+                  className="rounded-xl border border-amber-200 bg-white p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {task.taskName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {task.departmentName} · {formatDate(task.dueAt, true)}
+                      </p>
+                    </div>
+                    <PriorityBadge priority={task.priority} />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="mt-3 w-full bg-teal-700 hover:bg-teal-800"
+                    disabled={completeOverdue.isPending}
+                    onClick={() => {
+                      const note = window.prompt(
+                        "Completion note",
+                        "Verified and completed during overdue-task review."
+                      );
+                      if (note?.trim())
+                        completeOverdue.mutate({
+                          assignmentId: task.id,
+                          notes: note.trim(),
+                        });
+                    }}
+                  >
+                    Mark completed
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <Table className="min-w-[760px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Task</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead className="text-right">Resolution</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.overdueManagerAssignments.map(task => (
+                    <TableRow key={task.id}>
+                      <TableCell className="font-medium text-slate-800">
+                        {task.taskName}
+                      </TableCell>
+                      <TableCell className="text-slate-500">
+                        {task.departmentName}
+                      </TableCell>
+                      <TableCell className="text-slate-500">
+                        {formatDate(task.dueAt, true)}
+                      </TableCell>
+                      <TableCell>
+                        <PriorityBadge priority={task.priority} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          className="bg-teal-700 hover:bg-teal-800"
+                          disabled={completeOverdue.isPending}
+                          onClick={() => {
+                            const note = window.prompt(
+                              "Completion note",
+                              "Verified and completed during overdue-task review."
+                            );
+                            if (note?.trim())
+                              completeOverdue.mutate({
+                                assignmentId: task.id,
+                                notes: note.trim(),
+                              });
+                          }}
+                        >
+                          Mark completed
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card className="mt-6 border-slate-200 shadow-sm">
+        <CardHeader className="gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <CardTitle className="text-base">
+              Today's WhatsApp task workflow
+            </CardTitle>
+            <CardDescription>
+              This is the same Daily, Weekly, and Monthly task queue shown in
+              the WhatsApp register. Direct manager work and manual department
+              distribution stay visible in one place.
+            </CardDescription>
+          </div>
+          <Link
+            href="/whatsapp-tasks"
+            className="shrink-0 text-sm font-medium text-teal-700 hover:text-teal-900"
+          >
+            Open manager task register
+          </Link>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-3">
+            <div>
+              <Label className="text-xs text-slate-600">Priority</Label>
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger
+                  aria-label="Filter tasks by priority"
+                  className="mt-1.5 bg-white"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All priorities</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-600">Task state</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger
+                  aria-label="Filter tasks by overdue status"
+                  className="mt-1.5 bg-white"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All task states</SelectItem>
+                  <SelectItem value="overdue">Overdue only</SelectItem>
+                  <SelectItem value="active">Not overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-600">Sort tasks</Label>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger
+                  aria-label="Sort operational tasks"
+                  className="mt-1.5 bg-white"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="due_soon">Due soonest</SelectItem>
+                  <SelectItem value="overdue_first">Overdue first</SelectItem>
+                  <SelectItem value="priority">
+                    Priority, highest first
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="mb-3 flex items-center justify-between text-xs text-slate-500">
+            <span>
+              {filteredTasks.length} task{filteredTasks.length === 1 ? "" : "s"}{" "}
+              in view
+            </span>
+            {(priorityFilter !== "all" ||
+              statusFilter !== "all" ||
+              sortBy !== "due_soon") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-teal-700 hover:bg-teal-50 hover:text-teal-900"
+                onClick={() => {
+                  setPriorityFilter("all");
+                  setStatusFilter("all");
+                  setSortBy("due_soon");
+                }}
+              >
+                Reset view
+              </Button>
+            )}
+          </div>
+          <TaskTable tasks={filteredTasks} />
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
-function TaskTable({ tasks, compact = false }: { tasks: any[]; compact?: boolean }) {
-  return <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Task</TableHead><TableHead>Department</TableHead><TableHead>Due</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead>{!compact && <TableHead className="text-right">Manage</TableHead>}</TableRow></TableHeader><TableBody>{tasks.map((row: any) => { const task = row.task ?? row; const assignment = row.assignment ?? row; return <TableRow key={assignment.id}><TableCell className="min-w-52 font-medium text-slate-800">{task.name ?? row.taskName}</TableCell><TableCell className="text-slate-500">{row.departmentName}</TableCell><TableCell className="text-slate-500">{formatDate(assignment.dueAt, true)}</TableCell><TableCell><PriorityBadge priority={task.priority ?? row.priority} /></TableCell><TableCell><StatusBadge status={row.effectiveStatus ?? assignment.status} /></TableCell>{!compact && <TableCell className="text-right"><Link href="/whatsapp-tasks"><Button variant="ghost" size="sm" className="text-teal-700 hover:bg-teal-50 hover:text-teal-800">WhatsApp register <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Button></Link></TableCell>}</TableRow>; })}{tasks.length === 0 && <TableRow><TableCell colSpan={6} className="h-24 text-center text-sm text-slate-500">No task assignments match this view.</TableCell></TableRow>}</TableBody></Table></div>;
+function TaskTable({
+  tasks,
+  compact = false,
+}: {
+  tasks: any[];
+  compact?: boolean;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Task</TableHead>
+            <TableHead>Department</TableHead>
+            <TableHead>Due</TableHead>
+            <TableHead>Priority</TableHead>
+            <TableHead>Status</TableHead>
+            {!compact && <TableHead className="text-right">Manage</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {tasks.map((row: any) => {
+            const task = row.task ?? row;
+            const assignment = row.assignment ?? row;
+            return (
+              <TableRow key={assignment.id}>
+                <TableCell className="min-w-52 font-medium text-slate-800">
+                  {task.name ?? row.taskName}
+                </TableCell>
+                <TableCell className="text-slate-500">
+                  {row.departmentName}
+                </TableCell>
+                <TableCell className="text-slate-500">
+                  {formatDate(assignment.dueAt, true)}
+                </TableCell>
+                <TableCell>
+                  <PriorityBadge priority={task.priority ?? row.priority} />
+                </TableCell>
+                <TableCell>
+                  <StatusBadge
+                    status={row.effectiveStatus ?? assignment.status}
+                  />
+                </TableCell>
+                {!compact && (
+                  <TableCell className="text-right">
+                    <Link href="/whatsapp-tasks">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-teal-700 hover:bg-teal-50 hover:text-teal-800"
+                      >
+                        WhatsApp register{" "}
+                        <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </Link>
+                  </TableCell>
+                )}
+              </TableRow>
+            );
+          })}
+          {tasks.length === 0 && (
+            <TableRow>
+              <TableCell
+                colSpan={6}
+                className="h-24 text-center text-sm text-slate-500"
+              >
+                No task assignments match this view.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }
 
 export function MyDay() {
@@ -115,59 +1027,616 @@ export function MyDay() {
   const { user } = useAuth();
   if (day.isLoading || !day.data) return <LoadingPanel />;
   const groups = groupMyDayTasks(day.data.tasks);
-  return <><PageHeading eyebrow="Personal workspace" title="My Day" description={`Welcome${user?.name ? `, ${user.name}` : ""}. Use your manager-provisioned account to access your assigned work without an external account.`} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Today's tasks" value={day.data.counts.total} hint="Assigned or department tasks" icon={ClipboardCheck} tone="teal" /><MetricCard label="Overdue" value={day.data.counts.overdue} hint="Needs attention now" icon={AlertTriangle} tone="rose" /><MetricCard label="Pending" value={day.data.counts.pending} hint="Ready to work" icon={Clock3} tone="orange" /><MetricCard label="Completed" value={day.data.counts.completed} hint="Operational evidence recorded" icon={CheckCircle2} tone="sky" /></div><div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{groups.map(group => <MyDayGroupCard key={group.key} group={group} />)}</div><Card className="mt-6 border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">All assigned tasks</CardTitle><CardDescription>Open a task, complete each required check, report any issue, and submit the evidence.</CardDescription></CardHeader><CardContent><TaskTable tasks={day.data.tasks} /></CardContent></Card></>;
+  return (
+    <>
+      <PageHeading
+        eyebrow="Personal workspace"
+        title="My Day"
+        description={`Welcome${user?.name ? `, ${user.name}` : ""}. Use your manager-provisioned account to access your assigned work without an external account.`}
+      />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Today's tasks"
+          value={day.data.counts.total}
+          hint="Assigned or department tasks"
+          icon={ClipboardCheck}
+          tone="teal"
+        />
+        <MetricCard
+          label="Overdue"
+          value={day.data.counts.overdue}
+          hint="Needs attention now"
+          icon={AlertTriangle}
+          tone="rose"
+        />
+        <MetricCard
+          label="Pending"
+          value={day.data.counts.pending}
+          hint="Ready to work"
+          icon={Clock3}
+          tone="orange"
+        />
+        <MetricCard
+          label="Completed"
+          value={day.data.counts.completed}
+          hint="Operational evidence recorded"
+          icon={CheckCircle2}
+          tone="sky"
+        />
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {groups.map(group => (
+          <MyDayGroupCard key={group.key} group={group} />
+        ))}
+      </div>
+      <Card className="mt-6 border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">All assigned tasks</CardTitle>
+          <CardDescription>
+            Open a task, complete each required check, report any issue, and
+            submit the evidence.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TaskTable tasks={day.data.tasks} />
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
 function MyDayGroupCard({ group }: { group: MyDayTaskGroup }) {
-  const palette = group.key === "emergency" ? "border-rose-200 bg-rose-50/60" : group.key === "daily" ? "border-teal-200 bg-teal-50/60" : group.key === "weekly" ? "border-amber-200 bg-amber-50/70" : group.key === "completed" ? "border-emerald-200 bg-emerald-50/60" : "border-sky-200 bg-sky-50/70";
-  const Icon = group.key === "emergency" ? ShieldAlert : group.key === "daily" ? ClipboardCheck : group.key === "weekly" ? CalendarClock : group.key === "completed" ? CheckCircle2 : FileBarChart;
-  const scrollable = group.key === "emergency" || group.key === "daily" || group.key === "completed";
+  const palette =
+    group.key === "emergency"
+      ? "border-rose-200 bg-rose-50/60"
+      : group.key === "daily"
+        ? "border-teal-200 bg-teal-50/60"
+        : group.key === "weekly"
+          ? "border-amber-200 bg-amber-50/70"
+          : group.key === "completed"
+            ? "border-emerald-200 bg-emerald-50/60"
+            : "border-sky-200 bg-sky-50/70";
+  const Icon =
+    group.key === "emergency"
+      ? ShieldAlert
+      : group.key === "daily"
+        ? ClipboardCheck
+        : group.key === "weekly"
+          ? CalendarClock
+          : group.key === "completed"
+            ? CheckCircle2
+            : FileBarChart;
+  const scrollable =
+    group.key === "emergency" ||
+    group.key === "daily" ||
+    group.key === "completed";
   const visibleTasks = scrollable ? group.tasks : group.tasks.slice(0, 3);
-  return <Card className={cn("min-w-0 shadow-sm", palette)}><CardHeader className="pb-3"><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base text-slate-900">{group.label}</CardTitle><CardDescription className="mt-1 text-xs leading-relaxed">{group.description}</CardDescription></div><div className="rounded-xl bg-white/90 p-2 text-slate-700 shadow-sm"><Icon className="h-4 w-4" /></div></div></CardHeader><CardContent className="space-y-2"><p className="text-2xl font-semibold tracking-tight text-slate-950">{group.tasks.length}</p><p className="text-xs text-slate-500">{group.tasks.length === 1 ? "task in this list" : "tasks in this list"}</p>{scrollable && group.tasks.length > 3 && <p className="text-xs font-medium text-slate-600">Scroll to review all assigned tasks</p>}<div aria-label={`${group.label} task list`} role="region" tabIndex={scrollable ? 0 : undefined} className={cn("space-y-2 border-t border-slate-200/70 pt-3", scrollable && "max-h-72 overflow-y-auto overscroll-contain pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2")}>{visibleTasks.map(item => <Link key={item.assignment.id} href={`/tasks/${item.assignment.id}`}><div className="rounded-lg bg-white/80 p-2.5 transition-colors hover:bg-white"><p className="line-clamp-2 text-xs font-medium leading-relaxed text-slate-800">{item.task.name}</p><div className="mt-2 flex items-center justify-between gap-2"><PriorityBadge priority={item.task.priority} /><StatusBadge status={item.effectiveStatus} /></div></div></Link>)}{group.tasks.length === 0 && <p className="rounded-lg bg-white/55 p-2.5 text-xs text-slate-500">No {group.key === "weekly" ? "weekend" : group.key} tasks are assigned right now.</p>}{!scrollable && group.tasks.length > 3 && <p className="text-xs font-medium text-slate-600">+{group.tasks.length - 3} more in this list</p>}</div></CardContent></Card>;
+  return (
+    <Card className={cn("min-w-0 shadow-sm", palette)}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base text-slate-900">
+              {group.label}
+            </CardTitle>
+            <CardDescription className="mt-1 text-xs leading-relaxed">
+              {group.description}
+            </CardDescription>
+          </div>
+          <div className="rounded-xl bg-white/90 p-2 text-slate-700 shadow-sm">
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-2xl font-semibold tracking-tight text-slate-950">
+          {group.tasks.length}
+        </p>
+        <p className="text-xs text-slate-500">
+          {group.tasks.length === 1
+            ? "task in this list"
+            : "tasks in this list"}
+        </p>
+        {scrollable && group.tasks.length > 3 && (
+          <p className="text-xs font-medium text-slate-600">
+            Scroll to review all assigned tasks
+          </p>
+        )}
+        <div
+          aria-label={`${group.label} task list`}
+          role="region"
+          tabIndex={scrollable ? 0 : undefined}
+          className={cn(
+            "space-y-2 border-t border-slate-200/70 pt-3",
+            scrollable &&
+              "max-h-72 overflow-y-auto overscroll-contain pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
+          )}
+        >
+          {visibleTasks.map(item => (
+            <Link
+              key={item.assignment.id}
+              href={`/tasks/${item.assignment.id}`}
+            >
+              <div className="rounded-lg bg-white/80 p-2.5 transition-colors hover:bg-white">
+                <p className="line-clamp-2 text-xs font-medium leading-relaxed text-slate-800">
+                  {item.task.name}
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <PriorityBadge priority={item.task.priority} />
+                  <StatusBadge status={item.effectiveStatus} />
+                </div>
+              </div>
+            </Link>
+          ))}
+          {group.tasks.length === 0 && (
+            <p className="rounded-lg bg-white/55 p-2.5 text-xs text-slate-500">
+              No {group.key === "weekly" ? "weekend" : group.key} tasks are
+              assigned right now.
+            </p>
+          )}
+          {!scrollable && group.tasks.length > 3 && (
+            <p className="text-xs font-medium text-slate-600">
+              +{group.tasks.length - 3} more in this list
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function TaskDetail({ assignmentId }: { assignmentId: number }) {
   const detail = trpc.operations.taskDetail.useQuery({ assignmentId });
   const utils = trpc.useUtils();
   const [notes, setNotes] = useState("");
-  const save = trpc.operations.checklistSave.useMutation({ onSuccess: result => { toast.success(result.createdIssue ? "Finding saved and issue ticket created." : "Checklist finding saved."); utils.operations.taskDetail.invalidate({ assignmentId }); utils.operations.myDay.invalidate(); utils.operations.dashboard.invalidate(); utils.operations.issues.invalidate(); } });
-  const complete = trpc.operations.taskComplete.useMutation({ onSuccess: result => { toast.success(result.status === "pending_approval" ? "Task submitted for approval." : "Task completed and recorded."); utils.operations.taskDetail.invalidate({ assignmentId }); utils.operations.myDay.invalidate(); utils.operations.dashboard.invalidate(); }, onError: error => toast.error(error.message || "Task could not be submitted. Please review the required items and try again.") });
+  const save = trpc.operations.checklistSave.useMutation({
+    onSuccess: result => {
+      toast.success(
+        result.createdIssue
+          ? "Finding saved and issue ticket created."
+          : "Checklist finding saved."
+      );
+      utils.operations.taskDetail.invalidate({ assignmentId });
+      utils.operations.myDay.invalidate();
+      utils.operations.dashboard.invalidate();
+      utils.operations.issues.invalidate();
+    },
+  });
+  const complete = trpc.operations.taskComplete.useMutation({
+    onSuccess: result => {
+      toast.success(
+        result.status === "pending_approval"
+          ? "Task submitted for approval."
+          : "Task completed and recorded."
+      );
+      utils.operations.taskDetail.invalidate({ assignmentId });
+      utils.operations.myDay.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+    onError: error =>
+      toast.error(
+        error.message ||
+          "Task could not be submitted. Please review the required items and try again."
+      ),
+  });
   if (detail.isLoading || !detail.data) return <LoadingPanel />;
   const data = detail.data;
   const required = data.checklist.filter(item => item.required).length;
-  const done = data.checklist.filter(item => item.required && item.result).length;
-  const isFinalized = ["completed", "pending_approval"].includes(data.assignment.status);
-  const completionBlocker = isFinalized ? data.assignment.status === "pending_approval" ? "This task has been submitted and is awaiting approval." : "This task has already been completed." : save.isPending ? "Saving the latest checklist result before submission." : done < required ? `Record every required checklist item before submitting (${required - done} remaining).` : null;
+  const done = data.checklist.filter(
+    item => item.required && item.result
+  ).length;
+  const isFinalized = ["completed", "pending_approval"].includes(
+    data.assignment.status
+  );
+  const completionBlocker = isFinalized
+    ? data.assignment.status === "pending_approval"
+      ? "This task has been submitted and is awaiting approval."
+      : "This task has already been completed."
+    : save.isPending
+      ? "Saving the latest checklist result before submission."
+      : done < required
+        ? `Record every required checklist item before submitting (${required - done} remaining).`
+        : null;
   const canSubmit = !completionBlocker && !complete.isPending;
-  return <><PageHeading eyebrow="Task execution" title={data.task.name} description={data.task.instructions || data.task.description || "No additional instructions were recorded."} action={<Link href="/my-day"><Button variant="outline">Back to My Day</Button></Link>} /><div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]"><Card className="border-slate-200 shadow-sm"><CardHeader><div className="flex flex-wrap items-center gap-2"><StatusBadge status={data.effectiveStatus} /><PriorityBadge priority={data.task.priority} /><Badge variant="outline" className="border-slate-200 capitalize text-slate-600">{data.task.frequency.replaceAll("_", " ")}</Badge></div><CardTitle className="pt-3 text-base">Required operational checklist</CardTitle><CardDescription>All required items must be recorded before the task can be submitted.</CardDescription></CardHeader><CardContent className="space-y-3">{data.checklist.map(item => <div className="rounded-xl border border-slate-200 p-3.5" key={item.id}><div className="flex items-start gap-3"><Checkbox checked={Boolean(item.result)} className="mt-0.5" onCheckedChange={checked => { if (checked) save.mutate({ assignmentId, checklistId: item.id, status: "available" }); }} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium text-slate-800">{item.label}</p>{item.result ? <StatusBadge status={item.result.status} /> : <Badge variant="outline" className="border-slate-200 text-slate-500">Not recorded</Badge>}</div>{item.expectedLocation && <p className="mt-1 text-xs text-slate-500">Expected location: <span className="font-medium text-slate-700">{item.expectedLocation}</span></p>}<div className="mt-3 flex flex-wrap gap-2">{["available", "not_available", "damaged", "expired", "low_stock", "under_maintenance", "missing", "wrong_location"].map(status => <Button key={status} type="button" size="sm" variant={item.result?.status === status ? "default" : "outline"} disabled={save.isPending} className={cn("h-7 px-2 text-xs capitalize", item.result?.status === status && "bg-teal-700 hover:bg-teal-800")} onClick={() => save.mutate({ assignmentId, checklistId: item.id, status: status as any })}>{status.replaceAll("_", " ")}</Button>)}</div>{item.result?.createdIssueId && <p className="mt-2 text-xs font-medium text-rose-700">Issue #{item.result.createdIssueId} was created automatically from this finding.</p>}</div></div></div>)}</CardContent></Card>
-      <div className="space-y-6"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Submission</CardTitle><CardDescription>{done}/{required} required checks recorded.</CardDescription></CardHeader><CardContent><Progress value={required ? (done / required) * 100 : 100} className="mb-4 h-2" /><Label htmlFor="taskNotes">Completion notes</Label><Textarea id="taskNotes" className="mt-2 min-h-28" value={notes} onChange={event => setNotes(event.target.value)} placeholder="Record operational notes or corrective actions." disabled={isFinalized} /><Button disabled={!canSubmit} onClick={() => complete.mutate({ assignmentId, notes })} className="mt-4 w-full bg-teal-700 hover:bg-teal-800">{complete.isPending ? "Submitting…" : isFinalized ? data.assignment.status === "pending_approval" ? "Awaiting approval" : "Task completed" : data.task.approvalRequired ? "Submit for approval" : "Mark task completed"}</Button>{completionBlocker && <p className="mt-3 text-xs text-slate-500">{completionBlocker}</p>}</CardContent></Card><Card className="border-slate-200 bg-slate-50 shadow-sm"><CardContent className="p-4"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Due time</p><p className="mt-1 text-lg font-semibold text-slate-900">{formatDate(data.assignment.dueAt, true)}</p><Separator className="my-3" /><p className="text-xs text-slate-500">Department</p><p className="mt-1 text-sm font-medium text-slate-800">{data.department.name}</p></CardContent></Card></div></div></>;
+  return (
+    <>
+      <PageHeading
+        eyebrow="Task execution"
+        title={data.task.name}
+        description={
+          data.task.instructions ||
+          data.task.description ||
+          "No additional instructions were recorded."
+        }
+        action={
+          <Link href="/my-day">
+            <Button variant="outline">Back to My Day</Button>
+          </Link>
+        }
+      />
+      <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={data.effectiveStatus} />
+              <PriorityBadge priority={data.task.priority} />
+              <Badge
+                variant="outline"
+                className="border-slate-200 capitalize text-slate-600"
+              >
+                {data.task.frequency.replaceAll("_", " ")}
+              </Badge>
+            </div>
+            <CardTitle className="pt-3 text-base">
+              Required operational checklist
+            </CardTitle>
+            <CardDescription>
+              All required items must be recorded before the task can be
+              submitted.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.checklist.map(item => (
+              <div
+                className="rounded-xl border border-slate-200 p-3.5"
+                key={item.id}
+              >
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={Boolean(item.result)}
+                    className="mt-0.5"
+                    onCheckedChange={checked => {
+                      if (checked)
+                        save.mutate({
+                          assignmentId,
+                          checklistId: item.id,
+                          status: "available",
+                        });
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-800">
+                        {item.label}
+                      </p>
+                      {item.result ? (
+                        <StatusBadge status={item.result.status} />
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="border-slate-200 text-slate-500"
+                        >
+                          Not recorded
+                        </Badge>
+                      )}
+                    </div>
+                    {item.expectedLocation && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Expected location:{" "}
+                        <span className="font-medium text-slate-700">
+                          {item.expectedLocation}
+                        </span>
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {[
+                        "available",
+                        "not_available",
+                        "damaged",
+                        "expired",
+                        "low_stock",
+                        "under_maintenance",
+                        "missing",
+                        "wrong_location",
+                      ].map(status => (
+                        <Button
+                          key={status}
+                          type="button"
+                          size="sm"
+                          variant={
+                            item.result?.status === status
+                              ? "default"
+                              : "outline"
+                          }
+                          disabled={save.isPending}
+                          className={cn(
+                            "h-7 px-2 text-xs capitalize",
+                            item.result?.status === status &&
+                              "bg-teal-700 hover:bg-teal-800"
+                          )}
+                          onClick={() =>
+                            save.mutate({
+                              assignmentId,
+                              checklistId: item.id,
+                              status: status as any,
+                            })
+                          }
+                        >
+                          {status.replaceAll("_", " ")}
+                        </Button>
+                      ))}
+                    </div>
+                    {item.result?.createdIssueId && (
+                      <p className="mt-2 text-xs font-medium text-rose-700">
+                        Issue #{item.result.createdIssueId} was created
+                        automatically from this finding.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <div className="space-y-6">
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Submission</CardTitle>
+              <CardDescription>
+                {done}/{required} required checks recorded.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Progress
+                value={required ? (done / required) * 100 : 100}
+                className="mb-4 h-2"
+              />
+              <Label htmlFor="taskNotes">Completion notes</Label>
+              <Textarea
+                id="taskNotes"
+                className="mt-2 min-h-28"
+                value={notes}
+                onChange={event => setNotes(event.target.value)}
+                placeholder="Record operational notes or corrective actions."
+                disabled={isFinalized}
+              />
+              <Button
+                disabled={!canSubmit}
+                onClick={() => complete.mutate({ assignmentId, notes })}
+                className="mt-4 w-full bg-teal-700 hover:bg-teal-800"
+              >
+                {complete.isPending
+                  ? "Submitting…"
+                  : isFinalized
+                    ? data.assignment.status === "pending_approval"
+                      ? "Awaiting approval"
+                      : "Task completed"
+                    : data.task.approvalRequired
+                      ? "Submit for approval"
+                      : "Mark task completed"}
+              </Button>
+              {completionBlocker && (
+                <p className="mt-3 text-xs text-slate-500">
+                  {completionBlocker}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 bg-slate-50 shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                Due time
+              </p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatDate(data.assignment.dueAt, true)}
+              </p>
+              <Separator className="my-3" />
+              <p className="text-xs text-slate-500">Department</p>
+              <p className="mt-1 text-sm font-medium text-slate-800">
+                {data.department.name}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
 }
 
 export function TaskCreate() {
   const modules = trpc.operations.modules.useQuery();
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", departmentId: "", dueTime: "09:00", priority: "medium" as "critical" | "high" | "medium" | "low", frequency: "daily" as any, weeklyDay: "saturday" as "saturday" | "sunday", category: "Operational check", instructions: "", checklist: "" });
-  const create = trpc.operations.taskCreate.useMutation({ onSuccess: () => { toast.success("Department WhatsApp task plan created."); setOpen(false); utils.operations.dashboard.invalidate(); utils.operations.whatsappTaskRegister.invalidate(); utils.operations.departmentSchedules.invalidate(); } });
-  const submit = () => { if (!form.name || !form.departmentId) return toast.error("Enter a task name and department."); create.mutate({ name: form.name, departmentId: Number(form.departmentId), dueTime: form.dueTime, priority: form.priority, frequency: form.frequency, weeklyDay: form.frequency === "weekly" ? form.weeklyDay : undefined, category: form.category, instructions: form.instructions || undefined, checklist: form.checklist.split("\n").map(item => item.trim()).filter(Boolean) }); };
-  if (user?.role !== "super_admin") return <Card className="mx-auto max-w-xl border-rose-200"><CardContent className="p-6 text-center"><ShieldAlert className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-3 text-xl font-semibold text-slate-900">Super-admin access required</h1><p className="mt-2 text-sm text-slate-500">Only the super administrator can add daily, weekly, or monthly task plans for a department.</p></CardContent></Card>;
-  return <>
-    <PageHeading eyebrow="Task planning" title="Create WhatsApp task schedule" description="Create a department-owned daily, weekly, or monthly task that managers distribute manually through the WhatsApp register." />
-    <Card className="max-w-3xl border-slate-200 shadow-sm">
-      <CardContent className="grid gap-5 p-5 sm:grid-cols-2">
-        <div className="sm:col-span-2"><Label>Task name</Label><Input className="mt-2" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} placeholder="e.g., Daily emergency trolley check" /></div>
-        <div><Label>Department</Label><Select value={form.departmentId} onValueChange={departmentId => setForm({ ...form, departmentId })}><SelectTrigger className="mt-2"><SelectValue placeholder="Select department" /></SelectTrigger><SelectContent>{modules.data?.departments.map(department => <SelectItem key={department.id} value={String(department.id)}>{department.name}</SelectItem>)}</SelectContent></Select></div>
-        <div><Label>Due time</Label><Input type="time" className="mt-2" value={form.dueTime} onChange={event => setForm({ ...form, dueTime: event.target.value })} /></div>
-        <div><Label>WhatsApp cadence</Label><Select value={form.frequency} onValueChange={frequency => setForm({ ...form, frequency })}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent>{["daily", "weekly", "monthly"].map(item => <SelectItem value={item} key={item}>{item.replaceAll("_", " ")}</SelectItem>)}</SelectContent></Select></div>
-        {form.frequency === "weekly" && <div><Label>Weekend day</Label><Select value={form.weeklyDay} onValueChange={weeklyDay => setForm({ ...form, weeklyDay: weeklyDay as "saturday" | "sunday" })}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="saturday">Saturday</SelectItem><SelectItem value="sunday">Sunday</SelectItem></SelectContent></Select><p className="mt-1.5 text-xs text-slate-500">The first check is scheduled for this selected weekend day, then repeats weekly.</p></div>}
-        <div><Label>Priority</Label><Select value={form.priority} onValueChange={priority => setForm({ ...form, priority: priority as any })}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent>{["critical", "high", "medium", "low"].map(item => <SelectItem value={item} key={item}>{item}</SelectItem>)}</SelectContent></Select></div>
-        <div className="sm:col-span-2"><Label>Instructions</Label><Textarea className="mt-2" value={form.instructions} onChange={event => setForm({ ...form, instructions: event.target.value })} placeholder="Describe the safe, compliant operating procedure." /></div>
-        <div className="sm:col-span-2"><Label>Checklist items</Label><Textarea className="mt-2 min-h-32" value={form.checklist} onChange={event => setForm({ ...form, checklist: event.target.value })} placeholder={"One item per line\nVerify power-on self test\nInspect equipment location"} /></div>
-        <div className="sm:col-span-2 flex justify-end"><Button onClick={submit} disabled={create.isPending} className="bg-teal-700 hover:bg-teal-800">{create.isPending ? "Creating…" : "Create task"}</Button></div>
-      </CardContent>
-    </Card>
-  </>;
+  const [form, setForm] = useState({
+    name: "",
+    departmentId: "",
+    dueTime: "09:00",
+    priority: "medium" as "critical" | "high" | "medium" | "low",
+    frequency: "daily" as any,
+    weeklyDay: "saturday" as "saturday" | "sunday",
+    category: "Operational check",
+    instructions: "",
+    checklist: "",
+  });
+  const create = trpc.operations.taskCreate.useMutation({
+    onSuccess: () => {
+      toast.success("Department WhatsApp task plan created.");
+      utils.operations.dashboard.invalidate();
+      utils.operations.whatsappTaskRegister.invalidate();
+      utils.operations.departmentSchedules.invalidate();
+    },
+  });
+  const submit = () => {
+    if (!form.name || !form.departmentId)
+      return toast.error("Enter a task name and department.");
+    create.mutate({
+      name: form.name,
+      departmentId: Number(form.departmentId),
+      dueTime: form.dueTime,
+      priority: form.priority,
+      frequency: form.frequency,
+      weeklyDay: form.frequency === "weekly" ? form.weeklyDay : undefined,
+      category: form.category,
+      instructions: form.instructions || undefined,
+      checklist: form.checklist
+        .split("\n")
+        .map(item => item.trim())
+        .filter(Boolean),
+    });
+  };
+  if (user?.role !== "super_admin")
+    return (
+      <Card className="mx-auto max-w-xl border-rose-200">
+        <CardContent className="p-6 text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-rose-600" />
+          <h1 className="mt-3 text-xl font-semibold text-slate-900">
+            Super-admin access required
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Only the super administrator can add daily, weekly, or monthly task
+            plans for a department.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  return (
+    <>
+      <PageHeading
+        eyebrow="Task planning"
+        title="Create WhatsApp task schedule"
+        description="Create a department-owned daily, weekly, or monthly task that managers distribute manually through the WhatsApp register."
+      />
+      <Card className="max-w-3xl border-slate-200 shadow-sm">
+        <CardContent className="grid gap-5 p-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label>Task name</Label>
+            <Input
+              className="mt-2"
+              value={form.name}
+              onChange={event => setForm({ ...form, name: event.target.value })}
+              placeholder="e.g., Daily emergency trolley check"
+            />
+          </div>
+          <div>
+            <Label>Department</Label>
+            <Select
+              value={form.departmentId}
+              onValueChange={departmentId => setForm({ ...form, departmentId })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
+                {modules.data?.departments.map(department => (
+                  <SelectItem key={department.id} value={String(department.id)}>
+                    {department.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Due time</Label>
+            <Input
+              type="time"
+              className="mt-2"
+              value={form.dueTime}
+              onChange={event =>
+                setForm({ ...form, dueTime: event.target.value })
+              }
+            />
+          </div>
+          <div>
+            <Label>WhatsApp cadence</Label>
+            <Select
+              value={form.frequency}
+              onValueChange={frequency => setForm({ ...form, frequency })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["daily", "weekly", "monthly"].map(item => (
+                  <SelectItem value={item} key={item}>
+                    {item.replaceAll("_", " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {form.frequency === "weekly" && (
+            <div>
+              <Label>Weekend day</Label>
+              <Select
+                value={form.weeklyDay}
+                onValueChange={weeklyDay =>
+                  setForm({
+                    ...form,
+                    weeklyDay: weeklyDay as "saturday" | "sunday",
+                  })
+                }
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="saturday">Saturday</SelectItem>
+                  <SelectItem value="sunday">Sunday</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1.5 text-xs text-slate-500">
+                The first check is scheduled for this selected weekend day, then
+                repeats weekly.
+              </p>
+            </div>
+          )}
+          <div>
+            <Label>Priority</Label>
+            <Select
+              value={form.priority}
+              onValueChange={priority =>
+                setForm({ ...form, priority: priority as any })
+              }
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["critical", "high", "medium", "low"].map(item => (
+                  <SelectItem value={item} key={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Instructions</Label>
+            <Textarea
+              className="mt-2"
+              value={form.instructions}
+              onChange={event =>
+                setForm({ ...form, instructions: event.target.value })
+              }
+              placeholder="Describe the safe, compliant operating procedure."
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Checklist items</Label>
+            <Textarea
+              className="mt-2 min-h-32"
+              value={form.checklist}
+              onChange={event =>
+                setForm({ ...form, checklist: event.target.value })
+              }
+              placeholder={
+                "One item per line\nVerify power-on self test\nInspect equipment location"
+              }
+            />
+          </div>
+          <div className="sm:col-span-2 flex justify-end">
+            <Button
+              onClick={submit}
+              disabled={create.isPending}
+              className="bg-teal-700 hover:bg-teal-800"
+            >
+              {create.isPending ? "Creating…" : "Create task"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
 function Issues() {
@@ -176,134 +1645,2228 @@ function Issues() {
   const utils = trpc.useUtils();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [historyIssueId, setHistoryIssueId] = useState<number | null>(null);
-  const [form, setForm] = useState({ title: "", departmentId: "", category: "Equipment", priority: "medium" as any, description: "" });
-  const create = trpc.operations.issueCreate.useMutation({ onSuccess: () => { toast.success("Issue reported and department notification created."); setDialogOpen(false); utils.operations.issues.invalidate(); utils.operations.dashboard.invalidate(); } });
-  const assign = trpc.operations.issueAssign.useMutation({ onSuccess: () => { toast.success("Issue assigned and assignee notified."); utils.operations.issues.invalidate(); utils.operations.dashboard.invalidate(); } });
-  const resolve = trpc.operations.issueResolve.useMutation({ onSuccess: () => { toast.success("Issue marked resolved and audit entry recorded."); utils.operations.issues.invalidate(); utils.operations.dashboard.invalidate(); } });
-  const history = trpc.operations.issueHistory.useQuery({ issueId: historyIssueId ?? 1 }, { enabled: historyIssueId !== null });
-  return <><PageHeading eyebrow="Risk and incident management" title="Operational issues" description="Capture failures, assign corrective action, follow escalation status, and maintain a complete resolution history." action={<Dialog open={dialogOpen} onOpenChange={setDialogOpen}><DialogTrigger asChild><Button className="bg-teal-700 hover:bg-teal-800"><Plus className="mr-2 h-4 w-4" />Report issue</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Report operational issue</DialogTitle><DialogDescription>Create a ticket for equipment, stock, maintenance, safety, or service disruption.</DialogDescription></DialogHeader><div className="grid gap-4 pt-2"><div><Label>Issue title</Label><Input className="mt-2" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></div><div><Label>Department</Label><Select value={form.departmentId} onValueChange={departmentId => setForm({ ...form, departmentId })}><SelectTrigger className="mt-2"><SelectValue placeholder="Select department" /></SelectTrigger><SelectContent>{modules.data?.departments.map(department => <SelectItem key={department.id} value={String(department.id)}>{department.name}</SelectItem>)}</SelectContent></Select></div><div className="grid grid-cols-2 gap-3"><div><Label>Category</Label><Input className="mt-2" value={form.category} onChange={event => setForm({ ...form, category: event.target.value })} /></div><div><Label>Priority</Label><Select value={form.priority} onValueChange={priority => setForm({ ...form, priority })}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent>{["critical", "high", "medium", "low"].map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div></div><div><Label>Description</Label><Textarea className="mt-2" value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></div><Button onClick={() => { if (!form.title || !form.departmentId) return toast.error("Enter an issue title and department."); create.mutate({ ...form, departmentId: Number(form.departmentId) }); }} disabled={create.isPending} className="bg-teal-700 hover:bg-teal-800">{create.isPending ? "Reporting…" : "Create issue"}</Button></div></DialogContent></Dialog>} />
-    <Card className="border-slate-200 shadow-sm"><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Reference</TableHead><TableHead>Issue</TableHead><TableHead>Department</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader><TableBody>{issues.data?.map(row => <TableRow key={row.issue.id}><TableCell className="font-mono text-xs text-slate-500">{row.issue.code}</TableCell><TableCell><p className="font-medium text-slate-800">{row.issue.title}</p><p className="mt-0.5 max-w-md truncate text-xs text-slate-500">{row.issue.description}</p></TableCell><TableCell className="text-slate-500">{row.departmentName}</TableCell><TableCell><PriorityBadge priority={row.issue.priority} /></TableCell><TableCell><StatusBadge status={row.issue.status} /></TableCell><TableCell className="text-slate-500">{formatDate(row.issue.dueAt, true)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => setHistoryIssueId(row.issue.id)}>History</Button>{!["resolved", "closed"].includes(row.issue.status) && !row.issue.assignedTo && <Button size="sm" variant="outline" disabled={assign.isPending} onClick={() => { const assignee = modules.data?.staff.find(person => person.departmentId === row.issue.departmentId && ["department_head", "supervisor"].includes(person.role)) ?? modules.data?.staff.find(person => person.departmentId === row.issue.departmentId) ?? modules.data?.staff[0]; if (!assignee) return toast.error("No active staff member is available for assignment."); assign.mutate({ issueId: row.issue.id, assignedTo: assignee.id }); }}>Assign</Button>}{!["resolved", "closed"].includes(row.issue.status) && <Button size="sm" variant="outline" disabled={resolve.isPending} onClick={() => { const resolution = window.prompt("Resolution note", "Corrective action completed and verified."); if (resolution) resolve.mutate({ issueId: row.issue.id, resolution }); }}>Resolve</Button>}</div></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card><Dialog open={historyIssueId !== null} onOpenChange={open => !open && setHistoryIssueId(null)}><DialogContent><DialogHeader><DialogTitle>Issue history</DialogTitle><DialogDescription>{history.data?.issue.code} · {history.data?.issue.title}</DialogDescription></DialogHeader><div className="max-h-[55vh] space-y-3 overflow-y-auto">{history.isLoading && <p className="text-sm text-slate-500">Loading audit history…</p>}{history.data?.history.map(entry => <div key={entry.audit.id} className="rounded-lg border border-slate-200 p-3"><p className="text-sm font-medium text-slate-800">{entry.audit.action.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-slate-500">{entry.actorName || "System"} · {formatDate(entry.audit.createdAt, true)}</p></div>)}{history.data?.comments.map(entry => <div key={`comment-${entry.comment.id}`} className="rounded-lg bg-slate-50 p-3"><p className="text-sm text-slate-700">{entry.comment.body}</p><p className="mt-1 text-xs text-slate-500">{entry.userName || "System"} · {formatDate(entry.comment.createdAt, true)}</p></div>)}</div></DialogContent></Dialog></>;
+  const [form, setForm] = useState({
+    title: "",
+    departmentId: "",
+    category: "Equipment",
+    priority: "medium" as any,
+    description: "",
+  });
+  const create = trpc.operations.issueCreate.useMutation({
+    onSuccess: () => {
+      toast.success("Issue reported and department notification created.");
+      setDialogOpen(false);
+      utils.operations.issues.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  const assign = trpc.operations.issueAssign.useMutation({
+    onSuccess: () => {
+      toast.success("Issue assigned and assignee notified.");
+      utils.operations.issues.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  const resolve = trpc.operations.issueResolve.useMutation({
+    onSuccess: () => {
+      toast.success("Issue marked resolved and audit entry recorded.");
+      utils.operations.issues.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  const history = trpc.operations.issueHistory.useQuery(
+    { issueId: historyIssueId ?? 1 },
+    { enabled: historyIssueId !== null }
+  );
+  return (
+    <>
+      <PageHeading
+        eyebrow="Risk and incident management"
+        title="Operational issues"
+        description="Capture failures, assign corrective action, follow escalation status, and maintain a complete resolution history."
+        action={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-teal-700 hover:bg-teal-800">
+                <Plus className="mr-2 h-4 w-4" />
+                Report issue
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Report operational issue</DialogTitle>
+                <DialogDescription>
+                  Create a ticket for equipment, stock, maintenance, safety, or
+                  service disruption.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 pt-2">
+                <div>
+                  <Label>Issue title</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.title}
+                    onChange={event =>
+                      setForm({ ...form, title: event.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Department</Label>
+                  <Select
+                    value={form.departmentId}
+                    onValueChange={departmentId =>
+                      setForm({ ...form, departmentId })
+                    }
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modules.data?.departments.map(department => (
+                        <SelectItem
+                          key={department.id}
+                          value={String(department.id)}
+                        >
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Category</Label>
+                    <Input
+                      className="mt-2"
+                      value={form.category}
+                      onChange={event =>
+                        setForm({ ...form, category: event.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Priority</Label>
+                    <Select
+                      value={form.priority}
+                      onValueChange={priority => setForm({ ...form, priority })}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["critical", "high", "medium", "low"].map(item => (
+                          <SelectItem key={item} value={item}>
+                            {item}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    className="mt-2"
+                    value={form.description}
+                    onChange={event =>
+                      setForm({ ...form, description: event.target.value })
+                    }
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    if (!form.title || !form.departmentId)
+                      return toast.error(
+                        "Enter an issue title and department."
+                      );
+                    create.mutate({
+                      ...form,
+                      departmentId: Number(form.departmentId),
+                    });
+                  }}
+                  disabled={create.isPending}
+                  className="bg-teal-700 hover:bg-teal-800"
+                >
+                  {create.isPending ? "Reporting…" : "Create issue"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Issue</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {issues.data?.map(row => (
+                  <TableRow key={row.issue.id}>
+                    <TableCell className="font-mono text-xs text-slate-500">
+                      {row.issue.code}
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium text-slate-800">
+                        {row.issue.title}
+                      </p>
+                      <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">
+                        {row.issue.description}
+                      </p>
+                    </TableCell>
+                    <TableCell className="text-slate-500">
+                      {row.departmentName}
+                    </TableCell>
+                    <TableCell>
+                      <PriorityBadge priority={row.issue.priority} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={row.issue.status} />
+                    </TableCell>
+                    <TableCell className="text-slate-500">
+                      {formatDate(row.issue.dueAt, true)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setHistoryIssueId(row.issue.id)}
+                        >
+                          History
+                        </Button>
+                        {!["resolved", "closed"].includes(row.issue.status) &&
+                          !row.issue.assignedTo && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={assign.isPending}
+                              onClick={() => {
+                                const assignee =
+                                  modules.data?.staff.find(
+                                    person =>
+                                      person.departmentId ===
+                                        row.issue.departmentId &&
+                                      [
+                                        "department_head",
+                                        "supervisor",
+                                      ].includes(person.role)
+                                  ) ??
+                                  modules.data?.staff.find(
+                                    person =>
+                                      person.departmentId ===
+                                      row.issue.departmentId
+                                  ) ??
+                                  modules.data?.staff[0];
+                                if (!assignee)
+                                  return toast.error(
+                                    "No active staff member is available for assignment."
+                                  );
+                                assign.mutate({
+                                  issueId: row.issue.id,
+                                  assignedTo: assignee.id,
+                                });
+                              }}
+                            >
+                              Assign
+                            </Button>
+                          )}
+                        {!["resolved", "closed"].includes(row.issue.status) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={resolve.isPending}
+                            onClick={() => {
+                              const resolution = window.prompt(
+                                "Resolution note",
+                                "Corrective action completed and verified."
+                              );
+                              if (resolution)
+                                resolve.mutate({
+                                  issueId: row.issue.id,
+                                  resolution,
+                                });
+                            }}
+                          >
+                            Resolve
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+      <Dialog
+        open={historyIssueId !== null}
+        onOpenChange={open => !open && setHistoryIssueId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Issue history</DialogTitle>
+            <DialogDescription>
+              {history.data?.issue.code} · {history.data?.issue.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto">
+            {history.isLoading && (
+              <p className="text-sm text-slate-500">Loading audit history…</p>
+            )}
+            {history.data?.history.map(entry => (
+              <div
+                key={entry.audit.id}
+                className="rounded-lg border border-slate-200 p-3"
+              >
+                <p className="text-sm font-medium text-slate-800">
+                  {entry.audit.action.replaceAll("_", " ")}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {entry.actorName || "System"} ·{" "}
+                  {formatDate(entry.audit.createdAt, true)}
+                </p>
+              </div>
+            ))}
+            {history.data?.comments.map(entry => (
+              <div
+                key={`comment-${entry.comment.id}`}
+                className="rounded-lg bg-slate-50 p-3"
+              >
+                <p className="text-sm text-slate-700">{entry.comment.body}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {entry.userName || "System"} ·{" "}
+                  {formatDate(entry.comment.createdAt, true)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 function EquipmentAndInventory({ mode }: { mode: "equipment" | "inventory" }) {
   const modules = trpc.operations.modules.useQuery();
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const canManage = ["super_admin", "hospital_admin", "department_head", "supervisor"].includes(user?.role ?? "staff");
+  const canManage = [
+    "super_admin",
+    "hospital_admin",
+    "department_head",
+    "supervisor",
+  ].includes(user?.role ?? "staff");
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [expiryOpen, setExpiryOpen] = useState(false);
-  const [maintenance, setMaintenance] = useState({ equipmentId: "", maintenanceType: "Preventive service", scheduledAt: "", vendor: "" });
-  const [expiry, setExpiry] = useState({ name: "", category: "Consumable", departmentId: "", batchNumber: "", quantity: "1", expiryDate: "", storageLocation: "" });
-  const createMaintenance = trpc.operations.maintenanceCreate.useMutation({ onSuccess: () => { toast.success("Maintenance schedule created and equipment status updated."); setMaintenanceOpen(false); utils.operations.modules.invalidate(); utils.operations.dashboard.invalidate(); } });
-  const createExpiry = trpc.operations.expiryCreate.useMutation({ onSuccess: () => { toast.success("Expiry item added to monitoring."); setExpiryOpen(false); utils.operations.modules.invalidate(); utils.operations.dashboard.invalidate(); } });
+  const [maintenance, setMaintenance] = useState({
+    equipmentId: "",
+    maintenanceType: "Preventive service",
+    scheduledAt: "",
+    vendor: "",
+  });
+  const [expiry, setExpiry] = useState({
+    name: "",
+    category: "Consumable",
+    departmentId: "",
+    batchNumber: "",
+    quantity: "1",
+    expiryDate: "",
+    storageLocation: "",
+  });
+  const createMaintenance = trpc.operations.maintenanceCreate.useMutation({
+    onSuccess: () => {
+      toast.success(
+        "Maintenance schedule created and equipment status updated."
+      );
+      setMaintenanceOpen(false);
+      utils.operations.modules.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  const createExpiry = trpc.operations.expiryCreate.useMutation({
+    onSuccess: () => {
+      toast.success("Expiry item added to monitoring.");
+      setExpiryOpen(false);
+      utils.operations.modules.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
   if (modules.isLoading || !modules.data) return <LoadingPanel />;
-  if (mode === "equipment") return <><PageHeading eyebrow="Asset readiness" title="Equipment management" description="Track operating condition, service schedules, calibration due dates, responsible personnel, and maintenance alerts." action={canManage ? <Dialog open={maintenanceOpen} onOpenChange={setMaintenanceOpen}><DialogTrigger asChild><Button className="bg-teal-700 hover:bg-teal-800"><Plus className="mr-2 h-4 w-4" />Schedule maintenance</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Schedule equipment maintenance</DialogTitle><DialogDescription>Create a maintenance record and flag equipment as under maintenance.</DialogDescription></DialogHeader><div className="grid gap-4"><Select value={maintenance.equipmentId} onValueChange={equipmentId => setMaintenance({ ...maintenance, equipmentId })}><SelectTrigger><SelectValue placeholder="Equipment" /></SelectTrigger><SelectContent>{modules.data.equipment.map(row => <SelectItem key={row.equipment.id} value={String(row.equipment.id)}>{row.equipment.name}</SelectItem>)}</SelectContent></Select><Input value={maintenance.maintenanceType} onChange={event => setMaintenance({ ...maintenance, maintenanceType: event.target.value })} placeholder="Maintenance type" /><Input type="datetime-local" value={maintenance.scheduledAt} onChange={event => setMaintenance({ ...maintenance, scheduledAt: event.target.value })} /><Input value={maintenance.vendor} onChange={event => setMaintenance({ ...maintenance, vendor: event.target.value })} placeholder="Service vendor" /><Button disabled={createMaintenance.isPending} onClick={() => { if (!maintenance.equipmentId || !maintenance.scheduledAt) return toast.error("Select equipment and a service time."); createMaintenance.mutate({ equipmentId: Number(maintenance.equipmentId), maintenanceType: maintenance.maintenanceType, scheduledAt: new Date(maintenance.scheduledAt), vendor: maintenance.vendor || undefined }); }} className="bg-teal-700 hover:bg-teal-800">Schedule maintenance</Button></div></DialogContent></Dialog> : undefined} /><div className="grid gap-4 lg:grid-cols-3">{modules.data.equipment.map(row => <Card className="border-slate-200 shadow-sm" key={row.equipment.id}><CardHeader className="pb-3"><div className="flex justify-between gap-3"><div><CardTitle className="text-base">{row.equipment.name}</CardTitle><CardDescription>{row.equipment.equipmentCode} · {row.departmentName}</CardDescription></div><StatusBadge status={row.equipment.status} /></div></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between"><span className="text-slate-500">Next service</span><span className="font-medium text-slate-700">{formatDate(row.equipment.nextServiceAt)}</span></div><div className="flex justify-between"><span className="text-slate-500">Calibration</span><span className="font-medium text-slate-700">{formatDate(row.equipment.nextCalibrationAt)}</span></div><div className="flex justify-between"><span className="text-slate-500">Service provider</span><span className="max-w-40 text-right font-medium text-slate-700">{row.equipment.maintenanceCompany || "—"}</span></div></CardContent></Card>)}</div></>;
-  return <><PageHeading eyebrow="Inventory control" title="Inventory and expiry management" description="Monitor stock thresholds, items approaching expiry, storage locations, and department responsibility." action={canManage ? <Dialog open={expiryOpen} onOpenChange={setExpiryOpen}><DialogTrigger asChild><Button className="bg-teal-700 hover:bg-teal-800"><Plus className="mr-2 h-4 w-4" />Add expiry item</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add expiry-managed item</DialogTitle><DialogDescription>Record a medicine, reagent, consumable, certificate, or calibration item for expiry monitoring.</DialogDescription></DialogHeader><div className="grid gap-4"><Input value={expiry.name} onChange={event => setExpiry({ ...expiry, name: event.target.value })} placeholder="Item name" /><div className="grid grid-cols-2 gap-3"><Input value={expiry.category} onChange={event => setExpiry({ ...expiry, category: event.target.value })} placeholder="Category" /><Input value={expiry.batchNumber} onChange={event => setExpiry({ ...expiry, batchNumber: event.target.value })} placeholder="Batch number" /></div><Select value={expiry.departmentId} onValueChange={departmentId => setExpiry({ ...expiry, departmentId })}><SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger><SelectContent>{modules.data.departments.map(department => <SelectItem key={department.id} value={String(department.id)}>{department.name}</SelectItem>)}</SelectContent></Select><div className="grid grid-cols-2 gap-3"><Input value={expiry.quantity} type="number" onChange={event => setExpiry({ ...expiry, quantity: event.target.value })} placeholder="Quantity" /><Input type="date" value={expiry.expiryDate} onChange={event => setExpiry({ ...expiry, expiryDate: event.target.value })} /></div><Input value={expiry.storageLocation} onChange={event => setExpiry({ ...expiry, storageLocation: event.target.value })} placeholder="Storage location" /><Button disabled={createExpiry.isPending} onClick={() => { if (!expiry.name || !expiry.departmentId || !expiry.expiryDate) return toast.error("Enter the item, department, and expiry date."); createExpiry.mutate({ name: expiry.name, category: expiry.category, departmentId: Number(expiry.departmentId), batchNumber: expiry.batchNumber || undefined, quantity: Number(expiry.quantity), expiryDate: new Date(expiry.expiryDate), storageLocation: expiry.storageLocation || undefined }); }} className="bg-teal-700 hover:bg-teal-800">Add to expiry dashboard</Button></div></DialogContent></Dialog> : undefined} /><Tabs defaultValue="expiry"><TabsList><TabsTrigger value="expiry">Expiry dashboard</TabsTrigger><TabsTrigger value="stock">Stock levels</TabsTrigger></TabsList><TabsContent value="expiry" className="mt-4"><Card className="border-slate-200 shadow-sm"><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Department</TableHead><TableHead>Batch</TableHead><TableHead>Expiry date</TableHead><TableHead>Storage</TableHead><TableHead>Health</TableHead></TableRow></TableHeader><TableBody>{modules.data.expiry.map(row => <TableRow key={row.expiry.id}><TableCell className="font-medium text-slate-800">{row.expiry.name}</TableCell><TableCell className="text-slate-500">{row.departmentName}</TableCell><TableCell className="font-mono text-xs text-slate-500">{row.expiry.batchNumber}</TableCell><TableCell className="text-slate-500">{formatDate(row.expiry.expiryDate)}</TableCell><TableCell className="text-slate-500">{row.expiry.storageLocation}</TableCell><TableCell><StatusBadge status={row.health} /></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card></TabsContent><TabsContent value="stock" className="mt-4"><Card className="border-slate-200 shadow-sm"><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Department</TableHead><TableHead>Available</TableHead><TableHead>Reorder point</TableHead><TableHead>Stock health</TableHead></TableRow></TableHeader><TableBody>{modules.data.inventory.map(row => <TableRow key={row.inventory.id}><TableCell className="font-medium text-slate-800">{row.inventory.name}</TableCell><TableCell className="text-slate-500">{row.departmentName}</TableCell><TableCell>{row.inventory.quantity} {row.inventory.unit}</TableCell><TableCell>{row.inventory.reorderLevel} {row.inventory.unit}</TableCell><TableCell><StatusBadge status={row.lowStock ? "low_stock" : "available"} /></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card></TabsContent></Tabs></>;
+  if (mode === "equipment")
+    return (
+      <>
+        <PageHeading
+          eyebrow="Asset readiness"
+          title="Equipment management"
+          description="Track operating condition, service schedules, calibration due dates, responsible personnel, and maintenance alerts."
+          action={
+            canManage ? (
+              <Dialog open={maintenanceOpen} onOpenChange={setMaintenanceOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-teal-700 hover:bg-teal-800">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Schedule maintenance
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Schedule equipment maintenance</DialogTitle>
+                    <DialogDescription>
+                      Create a maintenance record and flag equipment as under
+                      maintenance.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4">
+                    <Select
+                      value={maintenance.equipmentId}
+                      onValueChange={equipmentId =>
+                        setMaintenance({ ...maintenance, equipmentId })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Equipment" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modules.data.equipment.map(row => (
+                          <SelectItem
+                            key={row.equipment.id}
+                            value={String(row.equipment.id)}
+                          >
+                            {row.equipment.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={maintenance.maintenanceType}
+                      onChange={event =>
+                        setMaintenance({
+                          ...maintenance,
+                          maintenanceType: event.target.value,
+                        })
+                      }
+                      placeholder="Maintenance type"
+                    />
+                    <Input
+                      type="datetime-local"
+                      value={maintenance.scheduledAt}
+                      onChange={event =>
+                        setMaintenance({
+                          ...maintenance,
+                          scheduledAt: event.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      value={maintenance.vendor}
+                      onChange={event =>
+                        setMaintenance({
+                          ...maintenance,
+                          vendor: event.target.value,
+                        })
+                      }
+                      placeholder="Service vendor"
+                    />
+                    <Button
+                      disabled={createMaintenance.isPending}
+                      onClick={() => {
+                        if (
+                          !maintenance.equipmentId ||
+                          !maintenance.scheduledAt
+                        )
+                          return toast.error(
+                            "Select equipment and a service time."
+                          );
+                        createMaintenance.mutate({
+                          equipmentId: Number(maintenance.equipmentId),
+                          maintenanceType: maintenance.maintenanceType,
+                          scheduledAt: new Date(maintenance.scheduledAt),
+                          vendor: maintenance.vendor || undefined,
+                        });
+                      }}
+                      className="bg-teal-700 hover:bg-teal-800"
+                    >
+                      Schedule maintenance
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : undefined
+          }
+        />
+        <div className="grid gap-4 lg:grid-cols-3">
+          {modules.data.equipment.map(row => (
+            <Card className="border-slate-200 shadow-sm" key={row.equipment.id}>
+              <CardHeader className="pb-3">
+                <div className="flex justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base">
+                      {row.equipment.name}
+                    </CardTitle>
+                    <CardDescription>
+                      {row.equipment.equipmentCode} · {row.departmentName}
+                    </CardDescription>
+                  </div>
+                  <StatusBadge status={row.equipment.status} />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Next service</span>
+                  <span className="font-medium text-slate-700">
+                    {formatDate(row.equipment.nextServiceAt)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Calibration</span>
+                  <span className="font-medium text-slate-700">
+                    {formatDate(row.equipment.nextCalibrationAt)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Service provider</span>
+                  <span className="max-w-40 text-right font-medium text-slate-700">
+                    {row.equipment.maintenanceCompany || "—"}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </>
+    );
+  return (
+    <>
+      <PageHeading
+        eyebrow="Inventory control"
+        title="Inventory and expiry management"
+        description="Monitor stock thresholds, items approaching expiry, storage locations, and department responsibility."
+        action={
+          canManage ? (
+            <Dialog open={expiryOpen} onOpenChange={setExpiryOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-teal-700 hover:bg-teal-800">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add expiry item
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add expiry-managed item</DialogTitle>
+                  <DialogDescription>
+                    Record a medicine, reagent, consumable, certificate, or
+                    calibration item for expiry monitoring.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                  <Input
+                    value={expiry.name}
+                    onChange={event =>
+                      setExpiry({ ...expiry, name: event.target.value })
+                    }
+                    placeholder="Item name"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      value={expiry.category}
+                      onChange={event =>
+                        setExpiry({ ...expiry, category: event.target.value })
+                      }
+                      placeholder="Category"
+                    />
+                    <Input
+                      value={expiry.batchNumber}
+                      onChange={event =>
+                        setExpiry({
+                          ...expiry,
+                          batchNumber: event.target.value,
+                        })
+                      }
+                      placeholder="Batch number"
+                    />
+                  </div>
+                  <Select
+                    value={expiry.departmentId}
+                    onValueChange={departmentId =>
+                      setExpiry({ ...expiry, departmentId })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modules.data.departments.map(department => (
+                        <SelectItem
+                          key={department.id}
+                          value={String(department.id)}
+                        >
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      value={expiry.quantity}
+                      type="number"
+                      onChange={event =>
+                        setExpiry({ ...expiry, quantity: event.target.value })
+                      }
+                      placeholder="Quantity"
+                    />
+                    <Input
+                      type="date"
+                      value={expiry.expiryDate}
+                      onChange={event =>
+                        setExpiry({ ...expiry, expiryDate: event.target.value })
+                      }
+                    />
+                  </div>
+                  <Input
+                    value={expiry.storageLocation}
+                    onChange={event =>
+                      setExpiry({
+                        ...expiry,
+                        storageLocation: event.target.value,
+                      })
+                    }
+                    placeholder="Storage location"
+                  />
+                  <Button
+                    disabled={createExpiry.isPending}
+                    onClick={() => {
+                      if (
+                        !expiry.name ||
+                        !expiry.departmentId ||
+                        !expiry.expiryDate
+                      )
+                        return toast.error(
+                          "Enter the item, department, and expiry date."
+                        );
+                      createExpiry.mutate({
+                        name: expiry.name,
+                        category: expiry.category,
+                        departmentId: Number(expiry.departmentId),
+                        batchNumber: expiry.batchNumber || undefined,
+                        quantity: Number(expiry.quantity),
+                        expiryDate: new Date(expiry.expiryDate),
+                        storageLocation: expiry.storageLocation || undefined,
+                      });
+                    }}
+                    className="bg-teal-700 hover:bg-teal-800"
+                  >
+                    Add to expiry dashboard
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          ) : undefined
+        }
+      />
+      <Tabs defaultValue="expiry">
+        <TabsList>
+          <TabsTrigger value="expiry">Expiry dashboard</TabsTrigger>
+          <TabsTrigger value="stock">Stock levels</TabsTrigger>
+        </TabsList>
+        <TabsContent value="expiry" className="mt-4">
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Batch</TableHead>
+                      <TableHead>Expiry date</TableHead>
+                      <TableHead>Storage</TableHead>
+                      <TableHead>Health</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {modules.data.expiry.map(row => (
+                      <TableRow key={row.expiry.id}>
+                        <TableCell className="font-medium text-slate-800">
+                          {row.expiry.name}
+                        </TableCell>
+                        <TableCell className="text-slate-500">
+                          {row.departmentName}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-slate-500">
+                          {row.expiry.batchNumber}
+                        </TableCell>
+                        <TableCell className="text-slate-500">
+                          {formatDate(row.expiry.expiryDate)}
+                        </TableCell>
+                        <TableCell className="text-slate-500">
+                          {row.expiry.storageLocation}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={row.health} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="stock" className="mt-4">
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Available</TableHead>
+                      <TableHead>Reorder point</TableHead>
+                      <TableHead>Stock health</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {modules.data.inventory.map(row => (
+                      <TableRow key={row.inventory.id}>
+                        <TableCell className="font-medium text-slate-800">
+                          {row.inventory.name}
+                        </TableCell>
+                        <TableCell className="text-slate-500">
+                          {row.departmentName}
+                        </TableCell>
+                        <TableCell>
+                          {row.inventory.quantity} {row.inventory.unit}
+                        </TableCell>
+                        <TableCell>
+                          {row.inventory.reorderLevel} {row.inventory.unit}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge
+                            status={row.lowStock ? "low_stock" : "available"}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </>
+  );
 }
 
 function RosterAndHandover({ mode }: { mode: "roster" | "handover" }) {
   const modules = trpc.operations.modules.useQuery();
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const canManage = ["super_admin", "hospital_admin", "department_head", "supervisor"].includes(user?.role ?? "staff");
+  const canManage = [
+    "super_admin",
+    "hospital_admin",
+    "department_head",
+    "supervisor",
+  ].includes(user?.role ?? "staff");
   const [shift, setShift] = useState("Day to Evening");
   const [notes, setNotes] = useState("");
   const [rosterOpen, setRosterOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [importErrors, setImportErrors] = useState<Array<{ row: number; message: string }>>([]);
-  const [rosterForm, setRosterForm] = useState({ departmentId: "", userId: "", dutyDate: new Date().toISOString().slice(0, 10), shift: "Day", startTime: "08:00", endTime: "16:00", assignedDuty: "General operational coverage", attendance: "present" as "present" | "absent" | "late" | "leave" | "replacement", notes: "" });
-  const handover = trpc.operations.handoverCreate.useMutation({ onSuccess: () => { toast.success("Digital handover saved for the next shift."); setNotes(""); utils.operations.modules.invalidate(); } });
-  const updateAttendance = trpc.operations.dutyAttendanceUpdate.useMutation({ onSuccess: () => { toast.success("Attendance exception recorded and replacement alert sent."); utils.operations.modules.invalidate(); utils.operations.dashboard.invalidate(); } });
-  const createRoster = trpc.operations.dutyRosterCreate.useMutation({ onSuccess: () => { toast.success("Duty roster entry created."); setRosterOpen(false); utils.operations.modules.invalidate(); utils.operations.dashboard.invalidate(); } });
-  const importRoster = trpc.operations.dutyRosterImport.useMutation({ onSuccess: result => { setImportErrors(result.errors); if (result.createdCount) { toast.success(`${result.createdCount} roster ${result.createdCount === 1 ? "entry" : "entries"} imported.`); utils.operations.modules.invalidate(); utils.operations.dashboard.invalidate(); } if (result.errors.length) toast.error(`${result.errors.length} CSV ${result.errors.length === 1 ? "row needs" : "rows need"} attention.`); } });
+  const [importErrors, setImportErrors] = useState<
+    Array<{ row: number; message: string }>
+  >([]);
+  const [rosterForm, setRosterForm] = useState({
+    departmentId: "",
+    userId: "",
+    dutyDate: new Date().toISOString().slice(0, 10),
+    shift: "Day",
+    startTime: "08:00",
+    endTime: "16:00",
+    assignedDuty: "General operational coverage",
+    attendance: "present" as
+      | "present"
+      | "absent"
+      | "late"
+      | "leave"
+      | "replacement",
+    notes: "",
+  });
+  const handover = trpc.operations.handoverCreate.useMutation({
+    onSuccess: () => {
+      toast.success("Digital handover saved for the next shift.");
+      setNotes("");
+      utils.operations.modules.invalidate();
+    },
+  });
+  const updateAttendance = trpc.operations.dutyAttendanceUpdate.useMutation({
+    onSuccess: () => {
+      toast.success(
+        "Attendance exception recorded and replacement alert sent."
+      );
+      utils.operations.modules.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  const createRoster = trpc.operations.dutyRosterCreate.useMutation({
+    onSuccess: () => {
+      toast.success("Duty roster entry created.");
+      setRosterOpen(false);
+      utils.operations.modules.invalidate();
+      utils.operations.dashboard.invalidate();
+    },
+  });
+  const importRoster = trpc.operations.dutyRosterImport.useMutation({
+    onSuccess: result => {
+      setImportErrors(result.errors);
+      if (result.createdCount) {
+        toast.success(
+          `${result.createdCount} roster ${result.createdCount === 1 ? "entry" : "entries"} imported.`
+        );
+        utils.operations.modules.invalidate();
+        utils.operations.dashboard.invalidate();
+      }
+      if (result.errors.length)
+        toast.error(
+          `${result.errors.length} CSV ${result.errors.length === 1 ? "row needs" : "rows need"} attention.`
+        );
+    },
+  });
   if (modules.isLoading || !modules.data) return <LoadingPanel />;
   const downloadRosterTemplate = () => {
-    const content = "department,staff,duty_date,shift,start_time,end_time,assigned_duty,attendance,notes\nRadiology,Sample Staff,2026-08-22,Day,08:00,16:00,Imaging coverage,present,\n";
-    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "hospital-roster-template.csv"; anchor.click(); URL.revokeObjectURL(url);
+    const content =
+      "department,staff,duty_date,shift,start_time,end_time,assigned_duty,attendance,notes\nRadiology,Sample Staff,2026-08-22,Day,08:00,16:00,Imaging coverage,present,\n";
+    const url = URL.createObjectURL(
+      new Blob([content], { type: "text/csv;charset=utf-8" })
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "hospital-roster-template.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
   const parseRosterCsv = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const lines = String(reader.result ?? "").split(/\r?\n/).filter(line => line.trim());
-      const headers = lines.shift()?.split(",").map(item => item.trim().toLowerCase());
-      const required = ["department", "staff", "duty_date", "shift", "start_time", "end_time", "assigned_duty"];
-      if (!headers || required.some(header => !headers.includes(header))) { setImportErrors([{ row: 1, message: `Use the template columns: ${required.join(", ")}.` }]); return; }
-      const rows: any[] = []; const parseErrors: Array<{ row: number; message: string }> = [];
+      const lines = String(reader.result ?? "")
+        .split(/\r?\n/)
+        .filter(line => line.trim());
+      const headers = lines
+        .shift()
+        ?.split(",")
+        .map(item => item.trim().toLowerCase());
+      const required = [
+        "department",
+        "staff",
+        "duty_date",
+        "shift",
+        "start_time",
+        "end_time",
+        "assigned_duty",
+      ];
+      if (!headers || required.some(header => !headers.includes(header))) {
+        setImportErrors([
+          {
+            row: 1,
+            message: `Use the template columns: ${required.join(", ")}.`,
+          },
+        ]);
+        return;
+      }
+      const rows: any[] = [];
+      const parseErrors: Array<{ row: number; message: string }> = [];
       lines.forEach((line, index) => {
-        const values = line.split(",").map(item => item.trim()); const cell = (key: string) => values[headers.indexOf(key)] ?? "";
-        const department = modules.data.departments.find(item => item.name.toLowerCase() === cell("department").toLowerCase());
-        const staff = modules.data.staff.find(item => item.name?.toLowerCase() === cell("staff").toLowerCase() && item.departmentId === department?.id);
+        const values = line.split(",").map(item => item.trim());
+        const cell = (key: string) => values[headers.indexOf(key)] ?? "";
+        const department = modules.data.departments.find(
+          item => item.name.toLowerCase() === cell("department").toLowerCase()
+        );
+        const staff = modules.data.staff.find(
+          item =>
+            item.name?.toLowerCase() === cell("staff").toLowerCase() &&
+            item.departmentId === department?.id
+        );
         const dutyDate = new Date(`${cell("duty_date")}T00:00:00`);
-        if (!department) parseErrors.push({ row: index + 2, message: `Department “${cell("department")}” was not found.` });
-        else if (!staff) parseErrors.push({ row: index + 2, message: `Active staff member “${cell("staff")}” was not found in ${department.name}.` });
-        else if (Number.isNaN(dutyDate.getTime())) parseErrors.push({ row: index + 2, message: "Use duty_date in YYYY-MM-DD format." });
-        else rows.push({ departmentId: department.id, userId: staff.id, dutyDate, shift: cell("shift"), startTime: cell("start_time"), endTime: cell("end_time"), assignedDuty: cell("assigned_duty"), attendance: (["present", "absent", "late", "leave", "replacement"].includes(cell("attendance")) ? cell("attendance") : "present") as any, notes: cell("notes") || undefined });
+        if (!department)
+          parseErrors.push({
+            row: index + 2,
+            message: `Department “${cell("department")}” was not found.`,
+          });
+        else if (!staff)
+          parseErrors.push({
+            row: index + 2,
+            message: `Active staff member “${cell("staff")}” was not found in ${department.name}.`,
+          });
+        else if (Number.isNaN(dutyDate.getTime()))
+          parseErrors.push({
+            row: index + 2,
+            message: "Use duty_date in YYYY-MM-DD format.",
+          });
+        else
+          rows.push({
+            departmentId: department.id,
+            userId: staff.id,
+            dutyDate,
+            shift: cell("shift"),
+            startTime: cell("start_time"),
+            endTime: cell("end_time"),
+            assignedDuty: cell("assigned_duty"),
+            attendance: ([
+              "present",
+              "absent",
+              "late",
+              "leave",
+              "replacement",
+            ].includes(cell("attendance"))
+              ? cell("attendance")
+              : "present") as any,
+            notes: cell("notes") || undefined,
+          });
       });
-      setImportErrors(parseErrors); if (rows.length) importRoster.mutate({ rows });
+      setImportErrors(parseErrors);
+      if (rows.length) importRoster.mutate({ rows });
     };
     reader.readAsText(file);
   };
-  const rosterActions = canManage ? <div className="flex flex-wrap gap-2"><Dialog open={importOpen} onOpenChange={setImportOpen}><DialogTrigger asChild><Button variant="outline">Import CSV</Button></DialogTrigger><DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Import duty roster</DialogTitle><DialogDescription>Download the template, fill each line with a department and active staff name, then import up to 250 entries. Existing matching roster slots are skipped with row-level feedback.</DialogDescription></DialogHeader><div className="space-y-4"><Button variant="outline" onClick={downloadRosterTemplate}>Download CSV template</Button><Input type="file" accept=".csv,text/csv" onChange={event => { const file = event.target.files?.[0]; if (file) parseRosterCsv(file); }} />{importRoster.isPending && <p className="text-sm text-teal-700">Checking and importing roster rows…</p>}{importErrors.length > 0 && <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-rose-200 bg-rose-50 p-3">{importErrors.map(error => <p key={`${error.row}-${error.message}`} className="text-xs text-rose-700">Row {error.row}: {error.message}</p>)}</div>}</div></DialogContent></Dialog><Dialog open={rosterOpen} onOpenChange={setRosterOpen}><DialogTrigger asChild><Button className="bg-teal-700 hover:bg-teal-800"><Plus className="mr-2 h-4 w-4" />Add shift</Button></DialogTrigger><DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Add duty roster entry</DialogTitle><DialogDescription>Schedule an active staff member for a department shift. Matching slots are protected from duplicates.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><div><Label>Department</Label><Select value={rosterForm.departmentId} onValueChange={departmentId => setRosterForm({ ...rosterForm, departmentId, userId: "" })}><SelectTrigger className="mt-2"><SelectValue placeholder="Select department" /></SelectTrigger><SelectContent>{modules.data.departments.map(department => <SelectItem key={department.id} value={String(department.id)}>{department.name}</SelectItem>)}</SelectContent></Select></div><div><Label>Staff member</Label><Select value={rosterForm.userId} onValueChange={userId => setRosterForm({ ...rosterForm, userId })} disabled={!rosterForm.departmentId}><SelectTrigger className="mt-2"><SelectValue placeholder="Select staff" /></SelectTrigger><SelectContent>{modules.data.staff.filter(person => person.departmentId === Number(rosterForm.departmentId)).map(person => <SelectItem key={person.id} value={String(person.id)}>{person.name}</SelectItem>)}</SelectContent></Select></div><div><Label>Duty date</Label><Input className="mt-2" type="date" value={rosterForm.dutyDate} onChange={event => setRosterForm({ ...rosterForm, dutyDate: event.target.value })} /></div><div><Label>Shift</Label><Input className="mt-2" value={rosterForm.shift} onChange={event => setRosterForm({ ...rosterForm, shift: event.target.value })} /></div><div><Label>Start time</Label><Input className="mt-2" type="time" value={rosterForm.startTime} onChange={event => setRosterForm({ ...rosterForm, startTime: event.target.value })} /></div><div><Label>End time</Label><Input className="mt-2" type="time" value={rosterForm.endTime} onChange={event => setRosterForm({ ...rosterForm, endTime: event.target.value })} /></div><div className="sm:col-span-2"><Label>Assigned duty</Label><Input className="mt-2" value={rosterForm.assignedDuty} onChange={event => setRosterForm({ ...rosterForm, assignedDuty: event.target.value })} /></div><div><Label>Attendance</Label><Select value={rosterForm.attendance} onValueChange={attendance => setRosterForm({ ...rosterForm, attendance: attendance as any })}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent>{["present", "absent", "late", "leave", "replacement"].map(item => <SelectItem value={item} key={item}>{item}</SelectItem>)}</SelectContent></Select></div><div><Label>Notes</Label><Input className="mt-2" value={rosterForm.notes} onChange={event => setRosterForm({ ...rosterForm, notes: event.target.value })} /></div><div className="sm:col-span-2 flex justify-end"><Button className="bg-teal-700 hover:bg-teal-800" disabled={createRoster.isPending} onClick={() => { if (!rosterForm.departmentId || !rosterForm.userId || !rosterForm.dutyDate || !rosterForm.assignedDuty) return toast.error("Select department, staff member, date, and duty."); createRoster.mutate({ ...rosterForm, departmentId: Number(rosterForm.departmentId), userId: Number(rosterForm.userId), dutyDate: new Date(`${rosterForm.dutyDate}T00:00:00`), notes: rosterForm.notes || undefined }); }}>{createRoster.isPending ? "Saving…" : "Add shift"}</Button></div></div></DialogContent></Dialog></div> : undefined;
-  if (mode === "roster" && modules.data.rosters.length === 0) return <><PageHeading eyebrow="Workforce readiness" title="Duty roster and attendance" description="See scheduled shift coverage, attendance exceptions, replacements, and handover continuity at a glance. Hover or focus an indicator for operational detail." action={rosterActions} /><Card className="border-slate-200 shadow-sm"><CardContent className="p-6 text-center sm:p-10"><CalendarClock className="mx-auto h-9 w-9 text-teal-700" /><h2 className="mt-3 text-lg font-semibold text-slate-900">No duty coverage is recorded for today</h2><p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">Add or import the current shift roster to track attendance, replacement needs, and handover coverage.</p></CardContent></Card></>;
-  if (mode === "roster") return <><PageHeading eyebrow="Workforce readiness" title="Duty roster and attendance" description="See scheduled shift coverage, attendance exceptions, replacements, and handover continuity at a glance. Hover or focus an indicator for operational detail." action={rosterActions} /><Card className="border-slate-200 shadow-sm"><CardContent className="p-0"><p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">Swipe horizontally to review availability, handover status, and attendance actions.</p><div className="overflow-x-auto"><Table className="min-w-[960px]"><TableHeader><TableRow><TableHead>Team member</TableHead><TableHead>Department</TableHead><TableHead>Shift</TableHead><TableHead>Duty</TableHead><TableHead>Hours</TableHead><TableHead>Availability</TableHead><TableHead>Handover</TableHead>{canManage && <TableHead className="text-right">Update</TableHead>}</TableRow></TableHeader><TableBody>{modules.data.rosters.map(row => { const staffName = row.staffName ?? "Unassigned staff"; const departmentName = row.departmentName ?? "this department"; const shiftName = row.roster.shift ?? "Unspecified shift"; const openHandover = modules.data.handovers.find(handover => handover.departmentName === row.departmentName && handover.handover.unresolved); const attendance = row.roster.attendance ?? "absent"; const availability = getRosterAvailability(attendance, staffName, shiftName); const handover = getRosterHandover(openHandover?.handover, departmentName); return <TableRow key={row.roster.id}><TableCell className="font-medium text-slate-800">{staffName}</TableCell><TableCell className="text-slate-500">{departmentName}</TableCell><TableCell>{shiftName}</TableCell><TableCell className="text-slate-500">{row.roster.assignedDuty}</TableCell><TableCell className="text-slate-500">{row.roster.startTime}–{row.roster.endTime}</TableCell><TableCell><RosterIndicator {...availability} /></TableCell><TableCell><RosterIndicator {...handover} /></TableCell>{canManage && <TableCell className="text-right"><Button size="sm" variant="outline" disabled={updateAttendance.isPending} onClick={() => updateAttendance.mutate({ rosterId: row.roster.id, attendance: attendance === "present" ? "absent" : "present", notes: attendance === "present" ? "Marked absent from roster view." : "Attendance restored from roster view." })}>{attendance === "present" ? "Mark absent" : "Mark present"}</Button></TableCell>}</TableRow>; })}</TableBody></Table></div></CardContent></Card></>;
-  return <><PageHeading eyebrow="Continuity of operations" title="Shift handover" description="Record unresolved tasks, equipment problems, stock shortages, incidents, and notes so operational risks never disappear between shifts." /><div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Open handovers</CardTitle><CardDescription>Items that still need acknowledgement or closure.</CardDescription></CardHeader><CardContent className="space-y-3">{modules.data.handovers.map(row => <div className="rounded-xl border border-slate-200 p-3.5" key={row.handover.id}><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-slate-800">{row.departmentName} · {row.handover.shift}</p><StatusBadge status={row.handover.unresolved ? "pending" : "completed"} /></div><p className="mt-2 text-xs text-slate-500">{row.handover.pendingTasks || row.handover.operationalNotes || "No detail recorded."}</p></div>)}</CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Create handover note</CardTitle><CardDescription>Record the items requiring follow-up by the next shift.</CardDescription></CardHeader><CardContent><div className="grid gap-4"><div><Label>Shift transition</Label><Input className="mt-2" value={shift} onChange={event => setShift(event.target.value)} /></div><div><Label>Handover notes</Label><Textarea className="mt-2 min-h-48" value={notes} onChange={event => setNotes(event.target.value)} placeholder="Pending tasks, equipment problems, stock shortages, incidents, and essential operational notes." /></div><Button disabled={handover.isPending || !modules.data.departments[0]} onClick={() => handover.mutate({ departmentId: modules.data.departments[0].id, shift, pendingTasks: notes, operationalNotes: notes })} className="bg-teal-700 hover:bg-teal-800">{handover.isPending ? "Saving…" : "Save handover"}</Button></div></CardContent></Card></div></>;
+  const rosterActions = canManage ? (
+    <div className="flex flex-wrap gap-2">
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline">Import CSV</Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Import duty roster</DialogTitle>
+            <DialogDescription>
+              Download the template, fill each line with a department and active
+              staff name, then import up to 250 entries. Existing matching
+              roster slots are skipped with row-level feedback.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Button variant="outline" onClick={downloadRosterTemplate}>
+              Download CSV template
+            </Button>
+            <Input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) parseRosterCsv(file);
+              }}
+            />
+            {importRoster.isPending && (
+              <p className="text-sm text-teal-700">
+                Checking and importing roster rows…
+              </p>
+            )}
+            {importErrors.length > 0 && (
+              <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-rose-200 bg-rose-50 p-3">
+                {importErrors.map(error => (
+                  <p
+                    key={`${error.row}-${error.message}`}
+                    className="text-xs text-rose-700"
+                  >
+                    Row {error.row}: {error.message}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={rosterOpen} onOpenChange={setRosterOpen}>
+        <DialogTrigger asChild>
+          <Button className="bg-teal-700 hover:bg-teal-800">
+            <Plus className="mr-2 h-4 w-4" />
+            Add shift
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Add duty roster entry</DialogTitle>
+            <DialogDescription>
+              Schedule an active staff member for a department shift. Matching
+              slots are protected from duplicates.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Department</Label>
+              <Select
+                value={rosterForm.departmentId}
+                onValueChange={departmentId =>
+                  setRosterForm({ ...rosterForm, departmentId, userId: "" })
+                }
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modules.data.departments.map(department => (
+                    <SelectItem
+                      key={department.id}
+                      value={String(department.id)}
+                    >
+                      {department.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Staff member</Label>
+              <Select
+                value={rosterForm.userId}
+                onValueChange={userId =>
+                  setRosterForm({ ...rosterForm, userId })
+                }
+                disabled={!rosterForm.departmentId}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modules.data.staff
+                    .filter(
+                      person =>
+                        person.departmentId === Number(rosterForm.departmentId)
+                    )
+                    .map(person => (
+                      <SelectItem key={person.id} value={String(person.id)}>
+                        {person.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Duty date</Label>
+              <Input
+                className="mt-2"
+                type="date"
+                value={rosterForm.dutyDate}
+                onChange={event =>
+                  setRosterForm({ ...rosterForm, dutyDate: event.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Shift</Label>
+              <Input
+                className="mt-2"
+                value={rosterForm.shift}
+                onChange={event =>
+                  setRosterForm({ ...rosterForm, shift: event.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Start time</Label>
+              <Input
+                className="mt-2"
+                type="time"
+                value={rosterForm.startTime}
+                onChange={event =>
+                  setRosterForm({
+                    ...rosterForm,
+                    startTime: event.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>End time</Label>
+              <Input
+                className="mt-2"
+                type="time"
+                value={rosterForm.endTime}
+                onChange={event =>
+                  setRosterForm({ ...rosterForm, endTime: event.target.value })
+                }
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Assigned duty</Label>
+              <Input
+                className="mt-2"
+                value={rosterForm.assignedDuty}
+                onChange={event =>
+                  setRosterForm({
+                    ...rosterForm,
+                    assignedDuty: event.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Attendance</Label>
+              <Select
+                value={rosterForm.attendance}
+                onValueChange={attendance =>
+                  setRosterForm({
+                    ...rosterForm,
+                    attendance: attendance as any,
+                  })
+                }
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["present", "absent", "late", "leave", "replacement"].map(
+                    item => (
+                      <SelectItem value={item} key={item}>
+                        {item}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Input
+                className="mt-2"
+                value={rosterForm.notes}
+                onChange={event =>
+                  setRosterForm({ ...rosterForm, notes: event.target.value })
+                }
+              />
+            </div>
+            <div className="sm:col-span-2 flex justify-end">
+              <Button
+                className="bg-teal-700 hover:bg-teal-800"
+                disabled={createRoster.isPending}
+                onClick={() => {
+                  if (
+                    !rosterForm.departmentId ||
+                    !rosterForm.userId ||
+                    !rosterForm.dutyDate ||
+                    !rosterForm.assignedDuty
+                  )
+                    return toast.error(
+                      "Select department, staff member, date, and duty."
+                    );
+                  createRoster.mutate({
+                    ...rosterForm,
+                    departmentId: Number(rosterForm.departmentId),
+                    userId: Number(rosterForm.userId),
+                    dutyDate: new Date(`${rosterForm.dutyDate}T00:00:00`),
+                    notes: rosterForm.notes || undefined,
+                  });
+                }}
+              >
+                {createRoster.isPending ? "Saving…" : "Add shift"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  ) : undefined;
+  if (mode === "roster" && modules.data.rosters.length === 0)
+    return (
+      <>
+        <PageHeading
+          eyebrow="Workforce readiness"
+          title="Duty roster and attendance"
+          description="See scheduled shift coverage, attendance exceptions, replacements, and handover continuity at a glance. Hover or focus an indicator for operational detail."
+          action={rosterActions}
+        />
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-6 text-center sm:p-10">
+            <CalendarClock className="mx-auto h-9 w-9 text-teal-700" />
+            <h2 className="mt-3 text-lg font-semibold text-slate-900">
+              No duty coverage is recorded for today
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">
+              Add or import the current shift roster to track attendance,
+              replacement needs, and handover coverage.
+            </p>
+          </CardContent>
+        </Card>
+      </>
+    );
+  if (mode === "roster")
+    return (
+      <>
+        <PageHeading
+          eyebrow="Workforce readiness"
+          title="Duty roster and attendance"
+          description="See scheduled shift coverage, attendance exceptions, replacements, and handover continuity at a glance. Hover or focus an indicator for operational detail."
+          action={rosterActions}
+        />
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-0">
+            <p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">
+              Swipe horizontally to review availability, handover status, and
+              attendance actions.
+            </p>
+            <div className="overflow-x-auto">
+              <Table className="min-w-[960px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Team member</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Shift</TableHead>
+                    <TableHead>Duty</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Availability</TableHead>
+                    <TableHead>Handover</TableHead>
+                    {canManage && (
+                      <TableHead className="text-right">Update</TableHead>
+                    )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {modules.data.rosters.map(row => {
+                    const staffName = row.staffName ?? "Unassigned staff";
+                    const departmentName =
+                      row.departmentName ?? "this department";
+                    const shiftName = row.roster.shift ?? "Unspecified shift";
+                    const openHandover = modules.data.handovers.find(
+                      handover =>
+                        handover.departmentName === row.departmentName &&
+                        handover.handover.unresolved
+                    );
+                    const attendance = row.roster.attendance ?? "absent";
+                    const availability = getRosterAvailability(
+                      attendance,
+                      staffName,
+                      shiftName
+                    );
+                    const handover = getRosterHandover(
+                      openHandover?.handover,
+                      departmentName
+                    );
+                    return (
+                      <TableRow key={row.roster.id}>
+                        <TableCell className="font-medium text-slate-800">
+                          {staffName}
+                        </TableCell>
+                        <TableCell className="text-slate-500">
+                          {departmentName}
+                        </TableCell>
+                        <TableCell>{shiftName}</TableCell>
+                        <TableCell className="text-slate-500">
+                          {row.roster.assignedDuty}
+                        </TableCell>
+                        <TableCell className="text-slate-500">
+                          {row.roster.startTime}–{row.roster.endTime}
+                        </TableCell>
+                        <TableCell>
+                          <RosterIndicator {...availability} />
+                        </TableCell>
+                        <TableCell>
+                          <RosterIndicator {...handover} />
+                        </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={updateAttendance.isPending}
+                              onClick={() =>
+                                updateAttendance.mutate({
+                                  rosterId: row.roster.id,
+                                  attendance:
+                                    attendance === "present"
+                                      ? "absent"
+                                      : "present",
+                                  notes:
+                                    attendance === "present"
+                                      ? "Marked absent from roster view."
+                                      : "Attendance restored from roster view.",
+                                })
+                              }
+                            >
+                              {attendance === "present"
+                                ? "Mark absent"
+                                : "Mark present"}
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    );
+  return (
+    <>
+      <PageHeading
+        eyebrow="Continuity of operations"
+        title="Shift handover"
+        description="Record unresolved tasks, equipment problems, stock shortages, incidents, and notes so operational risks never disappear between shifts."
+      />
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Open handovers</CardTitle>
+            <CardDescription>
+              Items that still need acknowledgement or closure.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {modules.data.handovers.map(row => (
+              <div
+                className="rounded-xl border border-slate-200 p-3.5"
+                key={row.handover.id}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {row.departmentName} · {row.handover.shift}
+                  </p>
+                  <StatusBadge
+                    status={row.handover.unresolved ? "pending" : "completed"}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {row.handover.pendingTasks ||
+                    row.handover.operationalNotes ||
+                    "No detail recorded."}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Create handover note</CardTitle>
+            <CardDescription>
+              Record the items requiring follow-up by the next shift.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              <div>
+                <Label>Shift transition</Label>
+                <Input
+                  className="mt-2"
+                  value={shift}
+                  onChange={event => setShift(event.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Handover notes</Label>
+                <Textarea
+                  className="mt-2 min-h-48"
+                  value={notes}
+                  onChange={event => setNotes(event.target.value)}
+                  placeholder="Pending tasks, equipment problems, stock shortages, incidents, and essential operational notes."
+                />
+              </div>
+              <Button
+                disabled={handover.isPending || !modules.data.departments[0]}
+                onClick={() =>
+                  handover.mutate({
+                    departmentId: modules.data.departments[0].id,
+                    shift,
+                    pendingTasks: notes,
+                    operationalNotes: notes,
+                  })
+                }
+                className="bg-teal-700 hover:bg-teal-800"
+              >
+                {handover.isPending ? "Saving…" : "Save handover"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
 }
 
 function Reports() {
   const report = trpc.operations.reports.useQuery();
   if (report.isLoading || !report.data) return <LoadingPanel />;
   const data = report.data;
-  const replyRate = data.whatsappSummary.dispatched ? Math.round((data.whatsappSummary.completed / data.whatsappSummary.dispatched) * 100) : 0;
+  const replyRate = data.whatsappSummary.dispatched
+    ? Math.round(
+        (data.whatsappSummary.completed / data.whatsappSummary.dispatched) * 100
+      )
+    : 0;
   const exportCsv = () => {
-    downloadCsv("hospital-operations-report.csv", [["Department", "WhatsApp tasks sent", "Completed replies", "Pending / no reply", "Points lost", "Monthly score"], ...data.whatsappAccountability.map(row => [row.departmentName, row.dispatched, row.completed, row.pending + row.awaitingReply, row.pointsLost, row.score])]);
+    downloadCsv("hospital-operations-report.csv", [
+      [
+        "Department",
+        "WhatsApp tasks sent",
+        "Completed replies",
+        "Pending / no reply",
+        "Points lost",
+        "Monthly score",
+      ],
+      ...data.whatsappAccountability.map(row => [
+        row.departmentName,
+        row.dispatched,
+        row.completed,
+        row.pending + row.awaitingReply,
+        row.pointsLost,
+        row.score,
+      ]),
+    ]);
     toast.success("CSV report downloaded.");
   };
-  const pointHistory = data.departmentPointTrends.flatMap(department => department.events.map(event => ({ ...event, departmentName: department.departmentName }))).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  return <><PageHeading eyebrow="Manager accountability" title="WhatsApp task reports" description="Review manual WhatsApp distribution, end-of-day replies, pending department work, and current-month point deductions. Download the meeting-ready scorecard or print it for review." action={<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={exportCsv}><FileBarChart className="mr-2 h-4 w-4" />Export scorecard CSV</Button><Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>} /><div className="grid gap-4 sm:grid-cols-3"><MetricCard label="WhatsApp reply rate" value={`${replyRate}%`} hint={`${data.whatsappSummary.completed} completed replies from ${data.whatsappSummary.dispatched} sent tasks`} icon={ClipboardCheck} tone="teal" /><MetricCard label="Pending / no reply" value={data.whatsappSummary.pendingOrNoReply} hint="Needs department follow-up" icon={AlertTriangle} tone="orange" /><MetricCard label="Points lost this month" value={data.whatsappSummary.pointsLost} hint="One deduction per unresolved task" icon={ShieldAlert} tone="rose" /></div><Card className="mt-6 border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Department WhatsApp accountability</CardTitle><CardDescription>Current-month manual task outcomes and meeting scorecard. Scores begin at 100 for each department.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table className="min-w-[760px]"><TableHeader><TableRow><TableHead>Department</TableHead><TableHead>Sent</TableHead><TableHead>Completed replies</TableHead><TableHead>Pending / no reply</TableHead><TableHead>Points lost</TableHead><TableHead>Score</TableHead></TableRow></TableHeader><TableBody>{data.whatsappAccountability.map(row => <TableRow key={row.departmentId}><TableCell className="font-medium text-slate-800">{row.departmentName}</TableCell><TableCell>{row.dispatched}</TableCell><TableCell>{row.completed}</TableCell><TableCell>{row.pending + row.awaitingReply}</TableCell><TableCell className={row.pointsLost ? "font-medium text-rose-700" : "text-slate-500"}>{row.pointsLost || "—"}</TableCell><TableCell className={row.score < 100 ? "font-semibold text-rose-700" : "font-semibold text-emerald-700"}>{row.score}/100</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card><Card className="mt-6 border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Department point trend</CardTitle><CardDescription>A dated, current-month history of each point change and the resulting department score.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table className="min-w-[700px]"><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Department</TableHead><TableHead>Point change</TableHead><TableHead>Running score</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader><TableBody>{pointHistory.map((event, index) => <TableRow key={`${event.departmentId}-${event.createdAt}-${index}`}><TableCell className="whitespace-nowrap text-slate-600">{formatDate(event.createdAt, true)}</TableCell><TableCell className="font-medium text-slate-800">{event.departmentName}</TableCell><TableCell className={event.pointDelta < 0 ? "font-medium text-rose-700" : "font-medium text-emerald-700"}>{event.pointDelta > 0 ? `+${event.pointDelta}` : event.pointDelta}</TableCell><TableCell className="font-semibold text-slate-800">{event.scoreAfter}/100</TableCell><TableCell className="text-slate-600">{event.reason || "Manual WhatsApp outcome"}</TableCell></TableRow>)}{pointHistory.length === 0 && <TableRow><TableCell colSpan={5} className="h-24 text-center text-sm text-slate-500">No department point changes have been recorded this month.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card></>;
+  const pointHistory = data.departmentPointTrends
+    .flatMap(department =>
+      department.events.map(event => ({
+        ...event,
+        departmentName: department.departmentName,
+      }))
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  return (
+    <>
+      <PageHeading
+        eyebrow="Manager accountability"
+        title="WhatsApp task reports"
+        description="Review manual WhatsApp distribution, end-of-day replies, pending department work, and current-month point deductions. Download the meeting-ready scorecard or print it for review."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportCsv}>
+              <FileBarChart className="mr-2 h-4 w-4" />
+              Export scorecard CSV
+            </Button>
+            <Button variant="outline" onClick={() => window.print()}>
+              Print / Save PDF
+            </Button>
+          </div>
+        }
+      />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="WhatsApp reply rate"
+          value={`${replyRate}%`}
+          hint={`${data.whatsappSummary.completed} completed replies from ${data.whatsappSummary.dispatched} sent tasks`}
+          icon={ClipboardCheck}
+          tone="teal"
+        />
+        <MetricCard
+          label="Pending / no reply"
+          value={data.whatsappSummary.pendingOrNoReply}
+          hint="Needs department follow-up"
+          icon={AlertTriangle}
+          tone="orange"
+        />
+        <MetricCard
+          label="Points lost this month"
+          value={data.whatsappSummary.pointsLost}
+          hint="One deduction per unresolved task"
+          icon={ShieldAlert}
+          tone="rose"
+        />
+      </div>
+      <Card className="mt-6 border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">
+            Department WhatsApp accountability
+          </CardTitle>
+          <CardDescription>
+            Current-month manual task outcomes and meeting scorecard. Scores
+            begin at 100 for each department.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[760px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Sent</TableHead>
+                  <TableHead>Completed replies</TableHead>
+                  <TableHead>Pending / no reply</TableHead>
+                  <TableHead>Points lost</TableHead>
+                  <TableHead>Score</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.whatsappAccountability.map(row => (
+                  <TableRow key={row.departmentId}>
+                    <TableCell className="font-medium text-slate-800">
+                      {row.departmentName}
+                    </TableCell>
+                    <TableCell>{row.dispatched}</TableCell>
+                    <TableCell>{row.completed}</TableCell>
+                    <TableCell>{row.pending + row.awaitingReply}</TableCell>
+                    <TableCell
+                      className={
+                        row.pointsLost
+                          ? "font-medium text-rose-700"
+                          : "text-slate-500"
+                      }
+                    >
+                      {row.pointsLost || "—"}
+                    </TableCell>
+                    <TableCell
+                      className={
+                        row.score < 100
+                          ? "font-semibold text-rose-700"
+                          : "font-semibold text-emerald-700"
+                      }
+                    >
+                      {row.score}/100
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="mt-6 border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Department point trend</CardTitle>
+          <CardDescription>
+            A dated, current-month history of each point change and the
+            resulting department score.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[700px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Point change</TableHead>
+                  <TableHead>Running score</TableHead>
+                  <TableHead>Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pointHistory.map((event, index) => (
+                  <TableRow
+                    key={`${event.departmentId}-${event.createdAt}-${index}`}
+                  >
+                    <TableCell className="whitespace-nowrap text-slate-600">
+                      {formatDate(event.createdAt, true)}
+                    </TableCell>
+                    <TableCell className="font-medium text-slate-800">
+                      {event.departmentName}
+                    </TableCell>
+                    <TableCell
+                      className={
+                        event.pointDelta < 0
+                          ? "font-medium text-rose-700"
+                          : "font-medium text-emerald-700"
+                      }
+                    >
+                      {event.pointDelta > 0
+                        ? `+${event.pointDelta}`
+                        : event.pointDelta}
+                    </TableCell>
+                    <TableCell className="font-semibold text-slate-800">
+                      {event.scoreAfter}/100
+                    </TableCell>
+                    <TableCell className="text-slate-600">
+                      {event.reason || "Manual WhatsApp outcome"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {pointHistory.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="h-24 text-center text-sm text-slate-500"
+                    >
+                      No department point changes have been recorded this month.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
 function OperationsCalendar() {
   const calendar = trpc.operations.calendar.useQuery();
   if (calendar.isLoading || !calendar.data) return <LoadingPanel />;
   const events = [
-    ...calendar.data.tasks.map(row => ({ ...row, group: "Task", date: row.date })),
-    ...calendar.data.maintenance.map(row => ({ ...row, group: "Maintenance", date: row.date })),
-    ...calendar.data.expiry.map(row => ({ ...row, group: "Expiry", date: row.date, status: "warning" })),
-    ...calendar.data.duties.map(row => ({ ...row, group: "Duty", date: row.date })),
-    ...calendar.data.risks.map(row => ({ ...row, group: "Risk review", date: row.date! })),
-    ...calendar.data.managementActions.map(row => ({ ...row, group: "Management action", date: row.date! })),
+    ...calendar.data.tasks.map(row => ({
+      ...row,
+      group: "Task",
+      date: row.date,
+    })),
+    ...calendar.data.maintenance.map(row => ({
+      ...row,
+      group: "Maintenance",
+      date: row.date,
+    })),
+    ...calendar.data.expiry.map(row => ({
+      ...row,
+      group: "Expiry",
+      date: row.date,
+      status: "warning",
+    })),
+    ...calendar.data.duties.map(row => ({
+      ...row,
+      group: "Duty",
+      date: row.date,
+    })),
+    ...calendar.data.risks.map(row => ({
+      ...row,
+      group: "Risk review",
+      date: row.date!,
+    })),
+    ...calendar.data.managementActions.map(row => ({
+      ...row,
+      group: "Management action",
+      date: row.date!,
+    })),
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  return <><PageHeading eyebrow="Hospital-wide schedule" title="Operations calendar" description="A unified view of scheduled tasks, maintenance, expiry dates, and duty coverage." /><Card className="border-slate-200 shadow-sm"><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Activity</TableHead><TableHead>Department</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{events.map((event, index) => <TableRow key={`${event.group}-${event.id}-${index}`}><TableCell className="text-slate-500">{formatDate(event.date, event.group !== "Expiry" && event.group !== "Duty")}</TableCell><TableCell><Badge variant="outline" className="border-slate-200 text-slate-600">{event.group}</Badge></TableCell><TableCell className="font-medium text-slate-800">{event.title}</TableCell><TableCell className="text-slate-500">{event.departmentName}</TableCell><TableCell>{event.status ? <StatusBadge status={event.status} /> : <StatusBadge status="scheduled" />}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card></>;
+  return (
+    <>
+      <PageHeading
+        eyebrow="Hospital-wide schedule"
+        title="Operations calendar"
+        description="A unified view of scheduled tasks, maintenance, expiry dates, and duty coverage."
+      />
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Activity</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event, index) => (
+                <TableRow key={`${event.group}-${event.id}-${index}`}>
+                  <TableCell className="text-slate-500">
+                    {formatDate(
+                      event.date,
+                      event.group !== "Expiry" && event.group !== "Duty"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className="border-slate-200 text-slate-600"
+                    >
+                      {event.group}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium text-slate-800">
+                    {event.title}
+                  </TableCell>
+                  <TableCell className="text-slate-500">
+                    {event.departmentName}
+                  </TableCell>
+                  <TableCell>
+                    {event.status ? (
+                      <StatusBadge status={event.status} />
+                    ) : (
+                      <StatusBadge status="scheduled" />
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
 function OperationsSettings() {
   const settings = trpc.operations.settings.useQuery();
   const utils = trpc.useUtils();
   const legacyOperations: any = trpc.operations;
-  const [department, setDepartment] = useState({ name: "", code: "", description: "" });
-  const [staff, setStaff] = useState({ name: "", email: "", departmentId: "", role: "staff" as any, title: "", username: "", temporaryPassword: "" });
-  const createDepartment = trpc.operations.departmentCreate.useMutation({ onSuccess: () => { toast.success("Department created."); setDepartment({ name: "", code: "", description: "" }); utils.operations.settings.invalidate(); utils.operations.modules.invalidate(); } });
-  const createStaff = legacyOperations.staffCreate.useMutation({ onSuccess: (result: any) => { toast.success(`Staff account ${result.username ?? "profile"} created. Share the temporary password securely.`); setStaff({ name: "", email: "", departmentId: "", role: "staff", title: "", username: "", temporaryPassword: "" }); utils.operations.settings.invalidate(); } });
-  const updateRule = trpc.operations.escalationRuleUpdate.useMutation({ onSuccess: () => { toast.success("Escalation rule updated."); utils.operations.settings.invalidate(); } });
-  const updateNotification = trpc.operations.notificationRuleUpdate.useMutation({ onSuccess: () => { toast.success("Notification rule updated."); utils.operations.settings.invalidate(); } });
-  const setDepartmentStatus = trpc.operations.departmentSetActive.useMutation({ onSuccess: () => { toast.success("Department status updated."); utils.operations.settings.invalidate(); utils.operations.modules.invalidate(); } });
-  const setStaffStatus = legacyOperations.staffSetActive.useMutation({ onSuccess: () => { toast.success("Staff status updated."); utils.operations.settings.invalidate(); } });
-  const resetStaffPassword = legacyOperations.staffPasswordReset.useMutation({ onSuccess: () => { toast.success("Temporary password reset. Share it securely with the staff member."); utils.operations.settings.invalidate(); } });
+  const [department, setDepartment] = useState({
+    name: "",
+    code: "",
+    description: "",
+  });
+  const [staff, setStaff] = useState({
+    name: "",
+    email: "",
+    departmentId: "",
+    role: "staff" as any,
+    title: "",
+    username: "",
+    temporaryPassword: "",
+  });
+  const createDepartment = trpc.operations.departmentCreate.useMutation({
+    onSuccess: () => {
+      toast.success("Department created.");
+      setDepartment({ name: "", code: "", description: "" });
+      utils.operations.settings.invalidate();
+      utils.operations.modules.invalidate();
+    },
+  });
+  const createStaff = legacyOperations.staffCreate.useMutation({
+    onSuccess: (result: any) => {
+      toast.success(
+        `Staff account ${result.username ?? "profile"} created. Share the temporary password securely.`
+      );
+      setStaff({
+        name: "",
+        email: "",
+        departmentId: "",
+        role: "staff",
+        title: "",
+        username: "",
+        temporaryPassword: "",
+      });
+      utils.operations.settings.invalidate();
+    },
+  });
+  const updateRule = trpc.operations.escalationRuleUpdate.useMutation({
+    onSuccess: () => {
+      toast.success("Escalation rule updated.");
+      utils.operations.settings.invalidate();
+    },
+  });
+  const updateNotification = trpc.operations.notificationRuleUpdate.useMutation(
+    {
+      onSuccess: () => {
+        toast.success("Notification rule updated.");
+        utils.operations.settings.invalidate();
+      },
+    }
+  );
+  const setDepartmentStatus = trpc.operations.departmentSetActive.useMutation({
+    onSuccess: () => {
+      toast.success("Department status updated.");
+      utils.operations.settings.invalidate();
+      utils.operations.modules.invalidate();
+    },
+  });
+  const setStaffStatus = legacyOperations.staffSetActive.useMutation({
+    onSuccess: () => {
+      toast.success("Staff status updated.");
+      utils.operations.settings.invalidate();
+    },
+  });
   if (settings.isLoading || !settings.data) return <LoadingPanel />;
-  const data = settings.data as unknown as Omit<NonNullable<typeof settings.data>, "staff"> & { staff: any[] };
-  return <><PageHeading eyebrow="Hospital administration" title="Operations setup" description="Manage the operating structure, role records, and escalation timing that govern the hospital operations workspace." /><Tabs defaultValue="rules"><TabsList><TabsTrigger value="rules">Escalation rules</TabsTrigger><TabsTrigger value="notifications">Notifications</TabsTrigger><TabsTrigger value="departments">Departments</TabsTrigger><TabsTrigger value="staff">Staff</TabsTrigger></TabsList><TabsContent value="rules" className="mt-4"><div className="grid gap-4 lg:grid-cols-2">{data.rules.map(rule => <Card className="border-slate-200 shadow-sm" key={rule.id}><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base">{rule.name}</CardTitle><CardDescription>Applies to {rule.appliesTo} · {rule.priority || "all"} priority</CardDescription></div><StatusBadge status={rule.active ? "active" : "inactive"} /></div></CardHeader><CardContent><div className="grid grid-cols-3 gap-3 text-sm"><div><Label>Staff</Label><Input className="mt-2" defaultValue={rule.firstReminderMinutes} type="number" id={`staff-${rule.id}`} /></div><div><Label>Head</Label><Input className="mt-2" defaultValue={rule.departmentHeadMinutes} type="number" id={`head-${rule.id}`} /></div><div><Label>Admin</Label><Input className="mt-2" defaultValue={rule.adminMinutes} type="number" id={`admin-${rule.id}`} /></div></div><Button className="mt-4 bg-teal-700 hover:bg-teal-800" disabled={updateRule.isPending} onClick={() => updateRule.mutate({ ruleId: rule.id, firstReminderMinutes: Number((document.getElementById(`staff-${rule.id}`) as HTMLInputElement).value), departmentHeadMinutes: Number((document.getElementById(`head-${rule.id}`) as HTMLInputElement).value), adminMinutes: Number((document.getElementById(`admin-${rule.id}`) as HTMLInputElement).value), active: rule.active })}>Save timing</Button></CardContent></Card>)}</div></TabsContent><TabsContent value="notifications" className="mt-4"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Notification rules</CardTitle><CardDescription>Control the in-app notices and optional email preference for each operational event. Email delivery requires a configured messaging integration.</CardDescription></CardHeader><CardContent className="space-y-3">{data.notificationRules.map(rule => <div className="grid gap-3 rounded-xl border border-slate-200 p-3.5 md:grid-cols-[1.5fr_0.7fr_0.7fr_0.7fr_auto] md:items-center" key={rule.id}><div><p className="text-sm font-medium text-slate-800">{rule.label}</p><p className="text-xs text-slate-500">{rule.eventType.replaceAll("_", " ")}</p></div><label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox id={`inapp-${rule.id}`} defaultChecked={rule.inAppEnabled} />In-app</label><label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox id={`email-${rule.id}`} defaultChecked={rule.emailEnabled} />Email</label><div><Label className="text-xs">Lead mins</Label><Input id={`lead-${rule.id}`} className="mt-1 h-8" type="number" defaultValue={rule.leadMinutes} /></div><Button size="sm" disabled={updateNotification.isPending} onClick={() => updateNotification.mutate({ ruleId: rule.id, inAppEnabled: (document.getElementById(`inapp-${rule.id}`) as HTMLButtonElement).dataset.state === "checked", emailEnabled: (document.getElementById(`email-${rule.id}`) as HTMLButtonElement).dataset.state === "checked", leadMinutes: Number((document.getElementById(`lead-${rule.id}`) as HTMLInputElement).value), active: rule.active })} className="bg-teal-700 hover:bg-teal-800">Save</Button></div>)}</CardContent></Card></TabsContent><TabsContent value="departments" className="mt-4"><div className="grid gap-6 xl:grid-cols-[1fr_1.25fr]"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Create department</CardTitle></CardHeader><CardContent className="space-y-3"><Input value={department.name} onChange={event => setDepartment({ ...department, name: event.target.value })} placeholder="Department name" /><Input value={department.code} onChange={event => setDepartment({ ...department, code: event.target.value })} placeholder="Code e.g. CSSD" /><Textarea value={department.description} onChange={event => setDepartment({ ...department, description: event.target.value })} placeholder="Operational scope" /><Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={createDepartment.isPending} onClick={() => { if (!department.name || !department.code) return toast.error("Enter a department name and code."); createDepartment.mutate(department); }}>Create department</Button></CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Departments</CardTitle></CardHeader><CardContent className="space-y-2">{data.departments.map(item => <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"><div><p className="text-sm font-medium text-slate-800">{item.name}</p><p className="text-xs text-slate-500">{item.code} · {item.description}</p></div><div className="flex items-center gap-2"><StatusBadge status={item.active ? "active" : "inactive"} /><Button size="sm" variant="outline" disabled={setDepartmentStatus.isPending} onClick={() => setDepartmentStatus.mutate({ departmentId: item.id, active: !item.active })}>{item.active ? "Deactivate" : "Activate"}</Button></div></div>)}</CardContent></Card></div></TabsContent><TabsContent value="staff" className="mt-4"><div className="grid gap-6 xl:grid-cols-[1fr_1.25fr]"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Add staff</CardTitle></CardHeader><CardContent className="space-y-3"><Input value={staff.name} onChange={event => setStaff({ ...staff, name: event.target.value })} placeholder="Full name" /><Input value={staff.email} onChange={event => setStaff({ ...staff, email: event.target.value })} placeholder="Email (optional)" /><Input value={staff.title} onChange={event => setStaff({ ...staff, title: event.target.value })} placeholder="Role title" /><Select value={staff.departmentId} onValueChange={departmentId => setStaff({ ...staff, departmentId })}><SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger><SelectContent>{data.departments.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent></Select><Select value={staff.role} onValueChange={role => setStaff({ ...staff, role })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["hospital_admin", "department_head", "supervisor", "staff", "viewer"].map(role => <SelectItem key={role} value={role}>{role.replaceAll("_", " ")}</SelectItem>)}</SelectContent></Select><Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={createStaff.isPending} onClick={() => { if (!staff.name || !staff.departmentId) return toast.error("Enter a staff name and department."); createStaff.mutate({ ...staff, email: staff.email || undefined, title: staff.title || undefined, departmentId: Number(staff.departmentId) }); }}>Add staff</Button></CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle className="text-base">Staff directory</CardTitle></CardHeader><CardContent className="space-y-2">{data.staff.map(row => <div key={row.user.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"><div><p className="text-sm font-medium text-slate-800">{row.user.name}</p><p className="text-xs capitalize text-slate-500">{row.profile?.title || "Staff"} · {row.user.role.replaceAll("_", " ")}</p></div><div className="flex items-center gap-2"><StatusBadge status={row.profile?.active ? "active" : "inactive"} />{row.profile && <Button size="sm" variant="outline" disabled={setStaffStatus.isPending} onClick={() => setStaffStatus.mutate({ userId: row.user.id, active: !row.profile!.active })}>{row.profile.active ? "Deactivate" : "Activate"}</Button>}</div></div>)}</CardContent></Card></div></TabsContent></Tabs></>;
+  const data = settings.data as unknown as Omit<
+    NonNullable<typeof settings.data>,
+    "staff"
+  > & { staff: any[] };
+  return (
+    <>
+      <PageHeading
+        eyebrow="Hospital administration"
+        title="Operations setup"
+        description="Manage the operating structure, role records, and escalation timing that govern the hospital operations workspace."
+      />
+      <Tabs defaultValue="rules">
+        <TabsList>
+          <TabsTrigger value="rules">Escalation rules</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="departments">Departments</TabsTrigger>
+          <TabsTrigger value="staff">Staff</TabsTrigger>
+        </TabsList>
+        <TabsContent value="rules" className="mt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {data.rules.map(rule => (
+              <Card className="border-slate-200 shadow-sm" key={rule.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base">{rule.name}</CardTitle>
+                      <CardDescription>
+                        Applies to {rule.appliesTo} · {rule.priority || "all"}{" "}
+                        priority
+                      </CardDescription>
+                    </div>
+                    <StatusBadge status={rule.active ? "active" : "inactive"} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <Label>Staff</Label>
+                      <Input
+                        className="mt-2"
+                        defaultValue={rule.firstReminderMinutes}
+                        type="number"
+                        id={`staff-${rule.id}`}
+                      />
+                    </div>
+                    <div>
+                      <Label>Head</Label>
+                      <Input
+                        className="mt-2"
+                        defaultValue={rule.departmentHeadMinutes}
+                        type="number"
+                        id={`head-${rule.id}`}
+                      />
+                    </div>
+                    <div>
+                      <Label>Admin</Label>
+                      <Input
+                        className="mt-2"
+                        defaultValue={rule.adminMinutes}
+                        type="number"
+                        id={`admin-${rule.id}`}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    className="mt-4 bg-teal-700 hover:bg-teal-800"
+                    disabled={updateRule.isPending}
+                    onClick={() =>
+                      updateRule.mutate({
+                        ruleId: rule.id,
+                        firstReminderMinutes: Number(
+                          (
+                            document.getElementById(
+                              `staff-${rule.id}`
+                            ) as HTMLInputElement
+                          ).value
+                        ),
+                        departmentHeadMinutes: Number(
+                          (
+                            document.getElementById(
+                              `head-${rule.id}`
+                            ) as HTMLInputElement
+                          ).value
+                        ),
+                        adminMinutes: Number(
+                          (
+                            document.getElementById(
+                              `admin-${rule.id}`
+                            ) as HTMLInputElement
+                          ).value
+                        ),
+                        active: rule.active,
+                      })
+                    }
+                  >
+                    Save timing
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+        <TabsContent value="notifications" className="mt-4">
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Notification rules</CardTitle>
+              <CardDescription>
+                Control the in-app notices and optional email preference for
+                each operational event. Email delivery requires a configured
+                messaging integration.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {data.notificationRules.map(rule => (
+                <div
+                  className="grid gap-3 rounded-xl border border-slate-200 p-3.5 md:grid-cols-[1.5fr_0.7fr_0.7fr_0.7fr_auto] md:items-center"
+                  key={rule.id}
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {rule.label}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {rule.eventType.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <Checkbox
+                      id={`inapp-${rule.id}`}
+                      defaultChecked={rule.inAppEnabled}
+                    />
+                    In-app
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <Checkbox
+                      id={`email-${rule.id}`}
+                      defaultChecked={rule.emailEnabled}
+                    />
+                    Email
+                  </label>
+                  <div>
+                    <Label className="text-xs">Lead mins</Label>
+                    <Input
+                      id={`lead-${rule.id}`}
+                      className="mt-1 h-8"
+                      type="number"
+                      defaultValue={rule.leadMinutes}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={updateNotification.isPending}
+                    onClick={() =>
+                      updateNotification.mutate({
+                        ruleId: rule.id,
+                        inAppEnabled:
+                          (
+                            document.getElementById(
+                              `inapp-${rule.id}`
+                            ) as HTMLButtonElement
+                          ).dataset.state === "checked",
+                        emailEnabled:
+                          (
+                            document.getElementById(
+                              `email-${rule.id}`
+                            ) as HTMLButtonElement
+                          ).dataset.state === "checked",
+                        leadMinutes: Number(
+                          (
+                            document.getElementById(
+                              `lead-${rule.id}`
+                            ) as HTMLInputElement
+                          ).value
+                        ),
+                        active: rule.active,
+                      })
+                    }
+                    className="bg-teal-700 hover:bg-teal-800"
+                  >
+                    Save
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="departments" className="mt-4">
+          <div className="grid gap-6 xl:grid-cols-[1fr_1.25fr]">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Create department</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Input
+                  value={department.name}
+                  onChange={event =>
+                    setDepartment({ ...department, name: event.target.value })
+                  }
+                  placeholder="Department name"
+                />
+                <Input
+                  value={department.code}
+                  onChange={event =>
+                    setDepartment({ ...department, code: event.target.value })
+                  }
+                  placeholder="Code e.g. CSSD"
+                />
+                <Textarea
+                  value={department.description}
+                  onChange={event =>
+                    setDepartment({
+                      ...department,
+                      description: event.target.value,
+                    })
+                  }
+                  placeholder="Operational scope"
+                />
+                <Button
+                  className="w-full bg-teal-700 hover:bg-teal-800"
+                  disabled={createDepartment.isPending}
+                  onClick={() => {
+                    if (!department.name || !department.code)
+                      return toast.error("Enter a department name and code.");
+                    createDepartment.mutate(department);
+                  }}
+                >
+                  Create department
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Departments</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {data.departments.map(item => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {item.code} · {item.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge
+                        status={item.active ? "active" : "inactive"}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={setDepartmentStatus.isPending}
+                        onClick={() =>
+                          setDepartmentStatus.mutate({
+                            departmentId: item.id,
+                            active: !item.active,
+                          })
+                        }
+                      >
+                        {item.active ? "Deactivate" : "Activate"}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        <TabsContent value="staff" className="mt-4">
+          <div className="grid gap-6 xl:grid-cols-[1fr_1.25fr]">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Add staff</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Input
+                  value={staff.name}
+                  onChange={event =>
+                    setStaff({ ...staff, name: event.target.value })
+                  }
+                  placeholder="Full name"
+                />
+                <Input
+                  value={staff.email}
+                  onChange={event =>
+                    setStaff({ ...staff, email: event.target.value })
+                  }
+                  placeholder="Email (optional)"
+                />
+                <Input
+                  value={staff.title}
+                  onChange={event =>
+                    setStaff({ ...staff, title: event.target.value })
+                  }
+                  placeholder="Role title"
+                />
+                <Select
+                  value={staff.departmentId}
+                  onValueChange={departmentId =>
+                    setStaff({ ...staff, departmentId })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {data.departments.map(item => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={staff.role}
+                  onValueChange={role => setStaff({ ...staff, role })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      "hospital_admin",
+                      "department_head",
+                      "supervisor",
+                      "staff",
+                      "viewer",
+                    ].map(role => (
+                      <SelectItem key={role} value={role}>
+                        {role.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  className="w-full bg-teal-700 hover:bg-teal-800"
+                  disabled={createStaff.isPending}
+                  onClick={() => {
+                    if (!staff.name || !staff.departmentId)
+                      return toast.error("Enter a staff name and department.");
+                    createStaff.mutate({
+                      ...staff,
+                      email: staff.email || undefined,
+                      title: staff.title || undefined,
+                      departmentId: Number(staff.departmentId),
+                    });
+                  }}
+                >
+                  Add staff
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Staff directory</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {data.staff.map(row => (
+                  <div
+                    key={row.user.id}
+                    className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">
+                        {row.user.name}
+                      </p>
+                      <p className="text-xs capitalize text-slate-500">
+                        {row.profile?.title || "Staff"} ·{" "}
+                        {row.user.role.replaceAll("_", " ")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge
+                        status={row.profile?.active ? "active" : "inactive"}
+                      />
+                      {row.profile && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={setStaffStatus.isPending}
+                          onClick={() =>
+                            setStaffStatus.mutate({
+                              userId: row.user.id,
+                              active: !row.profile!.active,
+                            })
+                          }
+                        >
+                          {row.profile.active ? "Deactivate" : "Activate"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </>
+  );
 }
 
 function ModuleOverview() {
-  return <><PageHeading eyebrow="Operations workspace" title="Hospital operations management" description="Navigate through manager-led operational modules from the sidebar. Use the Control Tower to prioritize work, then use the task register to distribute department tasks or complete work yourself." /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[{ icon: ClipboardCheck, title: "Manager task register", text: "Distribute department tasks through WhatsApp or record work you complete yourself.", href: "/whatsapp-tasks" }, { icon: ShieldAlert, title: "Issue management", text: "Turn operational failures into assigned, auditable corrective actions.", href: "/issues" }, { icon: PackageSearch, title: "Inventory & expiry", text: "Monitor stock levels, locations, and expiry alerts.", href: "/inventory" }, { icon: Wrench, title: "Equipment readiness", text: "Track operating status, maintenance, and calibration.", href: "/equipment" }, { icon: CalendarClock, title: "Duty & handover", text: "Coordinate roster coverage and next-shift follow-up.", href: "/roster" }, { icon: FileBarChart, title: "Reports", text: "Review compliance and departmental operational KPIs.", href: "/reports" }].map(item => <Link href={item.href} key={item.title}><Card className="h-full border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md"><CardContent className="p-5"><div className="mb-4 inline-flex rounded-xl bg-teal-50 p-2.5 text-teal-700"><item.icon className="h-5 w-5" /></div><h2 className="font-semibold text-slate-900">{item.title}</h2><p className="mt-1.5 text-sm leading-relaxed text-slate-500">{item.text}</p></CardContent></Card></Link>)}</div></>;
+  return (
+    <>
+      <PageHeading
+        eyebrow="Operations workspace"
+        title="Hospital operations management"
+        description="Navigate through manager-led operational modules from the sidebar. Use the Control Tower to prioritize work, then use the task register to distribute department tasks or complete work yourself."
+      />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          {
+            icon: ClipboardCheck,
+            title: "Manager task register",
+            text: "Distribute department tasks through WhatsApp or record work you complete yourself.",
+            href: "/whatsapp-tasks",
+          },
+          {
+            icon: ShieldAlert,
+            title: "Issue management",
+            text: "Turn operational failures into assigned, auditable corrective actions.",
+            href: "/issues",
+          },
+          {
+            icon: PackageSearch,
+            title: "Inventory & expiry",
+            text: "Monitor stock levels, locations, and expiry alerts.",
+            href: "/inventory",
+          },
+          {
+            icon: Wrench,
+            title: "Equipment readiness",
+            text: "Track operating status, maintenance, and calibration.",
+            href: "/equipment",
+          },
+          {
+            icon: CalendarClock,
+            title: "Duty & handover",
+            text: "Coordinate roster coverage and next-shift follow-up.",
+            href: "/roster",
+          },
+          {
+            icon: FileBarChart,
+            title: "Reports",
+            text: "Review compliance and departmental operational KPIs.",
+            href: "/reports",
+          },
+        ].map(item => (
+          <Link href={item.href} key={item.title}>
+            <Card className="h-full border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md">
+              <CardContent className="p-5">
+                <div className="mb-4 inline-flex rounded-xl bg-teal-50 p-2.5 text-teal-700">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <h2 className="font-semibold text-slate-900">{item.title}</h2>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+                  {item.text}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
 }
 
-export default function OperationsPage({ view }: { view: "dashboard" | "my-day" | "tasks" | "issues" | "equipment" | "inventory" | "roster" | "handover" | "reports" | "calendar" | "settings" | "overview" }) {
+export default function OperationsPage({
+  view,
+}: {
+  view:
+    | "dashboard"
+    | "my-day"
+    | "tasks"
+    | "issues"
+    | "equipment"
+    | "inventory"
+    | "roster"
+    | "handover"
+    | "reports"
+    | "calendar"
+    | "settings"
+    | "overview";
+}) {
   const [, params] = useRoute("/tasks/:id");
   if (view === "dashboard") return <ControlTower />;
   if (view === "my-day") return <MyDay />;
-  if (view === "tasks") return params?.id === "new" ? <TaskCreate /> : <TaskDetail key={params?.id} assignmentId={Number(params?.id)} />;
+  if (view === "tasks")
+    return params?.id === "new" ? (
+      <TaskCreate />
+    ) : (
+      <TaskDetail key={params?.id} assignmentId={Number(params?.id)} />
+    );
   if (view === "issues") return <Issues />;
   if (view === "equipment") return <EquipmentAndInventory mode="equipment" />;
   if (view === "inventory") return <EquipmentAndInventory mode="inventory" />;

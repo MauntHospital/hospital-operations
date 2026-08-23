@@ -19,18 +19,39 @@ export function findingCreatesIssue(status: FindingStatus) {
 
 export function priorityForFinding(status: FindingStatus) {
   if (status === "expired") return "critical" as const;
-  if (["damaged", "not_available", "under_maintenance", "missing"].includes(status)) return "high" as const;
+  if (
+    ["damaged", "not_available", "under_maintenance", "missing"].includes(
+      status
+    )
+  )
+    return "high" as const;
   return "medium" as const;
 }
 
-export function operationalAssignmentStatus(status: TaskStatus, dueAt: Date, now = new Date()): TaskStatus {
-  if (["completed", "failed", "skipped", "pending_approval"].includes(status)) return status;
+export function operationalAssignmentStatus(
+  status: TaskStatus,
+  dueAt: Date,
+  now = new Date()
+): TaskStatus {
+  if (["completed", "failed", "skipped", "pending_approval"].includes(status))
+    return status;
   return dueAt.getTime() < now.getTime() ? "overdue" : status;
 }
 
-export function isMyDayAssignmentVisible(input: { frequency: string; priority: string; status: TaskStatus; dueAt: Date }, now = new Date()) {
+export function isMyDayAssignmentVisible(
+  input: {
+    frequency: string;
+    priority: string;
+    status: TaskStatus;
+    dueAt: Date;
+  },
+  now = new Date()
+) {
   const status = operationalAssignmentStatus(input.status, input.dueAt, now);
-  const sameOperatingDay = input.dueAt.getFullYear() === now.getFullYear() && input.dueAt.getMonth() === now.getMonth() && input.dueAt.getDate() === now.getDate();
+  const sameOperatingDay =
+    input.dueAt.getFullYear() === now.getFullYear() &&
+    input.dueAt.getMonth() === now.getMonth() &&
+    input.dueAt.getDate() === now.getDate();
   if (["skipped", "failed"].includes(status)) return false;
   if (status === "completed") return sameOperatingDay;
   if (sameOperatingDay) return true;
@@ -47,7 +68,8 @@ export function expiryHealth(expiryDate: Date, now = new Date()) {
 
 export function computeNextDueDate(frequency: string, reference = new Date()) {
   const next = new Date(reference);
-  if (frequency === "daily" || frequency === "every_shift") next.setDate(next.getDate() + 1);
+  if (frequency === "daily" || frequency === "every_shift")
+    next.setDate(next.getDate() + 1);
   if (frequency === "weekly") next.setDate(next.getDate() + 7);
   if (frequency === "monthly") next.setMonth(next.getMonth() + 1);
   if (frequency === "quarterly") next.setMonth(next.getMonth() + 3);
@@ -55,7 +77,12 @@ export function computeNextDueDate(frequency: string, reference = new Date()) {
   return next;
 }
 
-export function initialTaskDueDate(frequency: string, dueTime: string, weeklyDay: "saturday" | "sunday" = "saturday", now = new Date()) {
+export function initialTaskDueDate(
+  frequency: string,
+  dueTime: string,
+  weeklyDay: "saturday" | "sunday" = "saturday",
+  now = new Date()
+) {
   const [hour, minute] = dueTime.split(":").map(Number);
   const dueAt = new Date(now);
   dueAt.setHours(hour ?? 0, minute ?? 0, 0, 0);
@@ -67,8 +94,13 @@ export function initialTaskDueDate(frequency: string, dueTime: string, weeklyDay
   return dueAt;
 }
 
-export function taskCompletionBlockReason(input: { requiredChecklistCount: number; completedChecklistCount: number }) {
-  const remaining = input.requiredChecklistCount - input.completedChecklistCount;
-  if (remaining > 0) return `Complete all required checklist items before submitting (${remaining} remaining).`;
+export function taskCompletionBlockReason(input: {
+  requiredChecklistCount: number;
+  completedChecklistCount: number;
+}) {
+  const remaining =
+    input.requiredChecklistCount - input.completedChecklistCount;
+  if (remaining > 0)
+    return `Complete all required checklist items before submitting (${remaining} remaining).`;
   return null;
 }

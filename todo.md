@@ -131,3 +131,10 @@
 - [x] Retire legacy staff-accessible task procedures so the current manager-led operating model is enforced server-side without relying on hidden routes.
 - [x] Document the current absence of a record-export workflow and confirm the audit scope only exercises implemented import and download-template functions.
 - [x] Save and publish the verified full-system audited stabilization release and quality report.
+- [x] Inventory the complete application codebase, dependencies, configuration, generated files, and existing safety coverage before cleanup.
+- [x] Identify and document safe code, CSS, dependency, and duplication cleanup candidates while preserving all established operational workflows.
+- [x] Run the full cleanup verification suite after removals and refactors, including tests, build, dependency audit, runtime-log review, and key workflow checks.
+- [x] Refactor or remove only verified redundant, obsolete, or debug-only implementation details without changing features or visual behavior.
+- [x] Add or update regression coverage for cleanup-sensitive logic and complete a second-pass unused-code review.
+- [x] Run formatting, test, type, production build, dependency, runtime-log, and responsive verification after cleanup.
+- [x] Publish the verified code-cleanup release with a code-quality report, preservation summary, and remaining-review register.

@@ -4,19 +4,39 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/_core/hooks/useAuth", () => ({
-  useAuth: () => ({ user: { id: 1, name: "Operations Manager", role: "hospital_admin" } }),
+  useAuth: () => ({
+    user: { id: 1, name: "Operations Manager", role: "hospital_admin" },
+  }),
 }));
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     operations: {
-      modules: { useQuery: () => ({ isLoading: false, data: { rosters: [], handovers: [], departments: [], staff: [] } }) },
-      handoverCreate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-      dutyAttendanceUpdate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-      dutyRosterCreate: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-      dutyRosterImport: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+      modules: {
+        useQuery: () => ({
+          isLoading: false,
+          data: { rosters: [], handovers: [], departments: [], staff: [] },
+        }),
+      },
+      handoverCreate: {
+        useMutation: () => ({ isPending: false, mutate: vi.fn() }),
+      },
+      dutyAttendanceUpdate: {
+        useMutation: () => ({ isPending: false, mutate: vi.fn() }),
+      },
+      dutyRosterCreate: {
+        useMutation: () => ({ isPending: false, mutate: vi.fn() }),
+      },
+      dutyRosterImport: {
+        useMutation: () => ({ isPending: false, mutate: vi.fn() }),
+      },
     },
-    useUtils: () => ({ operations: { modules: { invalidate: vi.fn() }, dashboard: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      operations: {
+        modules: { invalidate: vi.fn() },
+        dashboard: { invalidate: vi.fn() },
+      },
+    }),
   },
 }));
 
@@ -43,8 +63,12 @@ describe("Duty roster empty state", () => {
   it("shows a readable no-coverage card instead of an empty wide table", () => {
     act(() => root.render(<OperationsPage view="roster" />));
 
-    expect(container.textContent).toContain("No duty coverage is recorded for today");
-    expect(container.textContent).toContain("Add or import the current shift roster");
+    expect(container.textContent).toContain(
+      "No duty coverage is recorded for today"
+    );
+    expect(container.textContent).toContain(
+      "Add or import the current shift roster"
+    );
     expect(container.textContent).toContain("Add shift");
     expect(container.textContent).toContain("Import CSV");
     expect(container.querySelector("table")).toBeNull();

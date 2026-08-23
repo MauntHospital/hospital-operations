@@ -47,8 +47,15 @@ async function startServer() {
       const result = await runOperationalCycle();
       return res.json({ ok: true, ...result });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown scheduled operations error";
-      return res.status(500).json({ error: message, context: { path: req.path }, timestamp: new Date().toISOString() });
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown scheduled operations error";
+      return res.status(500).json({
+        error: message,
+        context: { path: req.path },
+        timestamp: new Date().toISOString(),
+      });
     }
   });
   // tRPC API

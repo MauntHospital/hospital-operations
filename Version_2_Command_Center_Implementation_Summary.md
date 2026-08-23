@@ -4,14 +4,14 @@
 
 Version 2 establishes a manager-led command center for operational accountability. The Control Tower now consolidates task, issue, equipment, inventory, staffing, handover, risk, and management-action attention signals into a configurable hospital operating status. The status is an operational decision-support indicator and does not make clinical decisions.
 
-| Area | Delivered behavior |
-|---|---|
-| WhatsApp accountability | Managers manually prepare, copy, confirm send, acknowledge, record an end-of-day outcome, review, and close departmental tasks. |
-| Department scoring | Priority deductions are stored in tenth-points, displayed on a 100-point scale, configurable by hospital administrators, and excluded for recorded excused outcomes. |
-| Risk management | Managers can create, assess, mitigate, review, and close likelihood-by-impact risks with severity labels. |
-| Management actions | Time-bound manager actions track ownership, priority, due dates, completion notes, and verification. |
-| Cross-module follow-up | A manager-confirmed queue turns concerning equipment, expiry, and inventory records into linked high-priority follow-up tasks. |
-| Discovery and scheduling | Cross-module search covers operational records, risks, and actions; the calendar includes risk-review and management-action due dates. |
+| Area                     | Delivered behavior                                                                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WhatsApp accountability  | Managers manually prepare, copy, confirm send, acknowledge, record an end-of-day outcome, review, and close departmental tasks.                                      |
+| Department scoring       | Priority deductions are stored in tenth-points, displayed on a 100-point scale, configurable by hospital administrators, and excluded for recorded excused outcomes. |
+| Risk management          | Managers can create, assess, mitigate, review, and close likelihood-by-impact risks with severity labels.                                                            |
+| Management actions       | Time-bound manager actions track ownership, priority, due dates, completion notes, and verification.                                                                 |
+| Cross-module follow-up   | A manager-confirmed queue turns concerning equipment, expiry, and inventory records into linked high-priority follow-up tasks.                                       |
+| Discovery and scheduling | Cross-module search covers operational records, risks, and actions; the calendar includes risk-review and management-action due dates.                               |
 
 ## Validation
 
