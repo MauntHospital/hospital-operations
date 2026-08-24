@@ -120,6 +120,17 @@ describe("WhatsAppTaskRegister command center", () => {
     expect(state.dispatchInputs).toEqual([]);
   });
 
+  it("offers documented escalation, rescheduling, and cancellation actions for a dispatched task", () => {
+    state.registerData = makeRegisterData({ id: 501, status: "awaiting_reply", sentAt: new Date(), messageText: "Task" });
+    act(() => root.render(<WhatsAppTaskRegister />));
+    const manage = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Manage") as HTMLButtonElement;
+    act(() => manage.click());
+    expect(document.body.textContent).toContain("Manage task lifecycle");
+    expect(document.body.textContent).toContain("Escalate task");
+    expect(document.body.textContent).toContain("Reschedule task");
+    expect(document.body.textContent).toContain("Cancel task");
+  });
+
   it("shows lifecycle metrics and daily, weekly, and monthly cadence plans", () => {
     act(() => root.render(<WhatsAppTaskRegister />));
     expect(container.textContent).toContain("Action required");

@@ -212,7 +212,20 @@ export default function DepartmentSchedules() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {rows.map(row => (
+              <div key={row.task.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="font-semibold text-slate-900">{row.task.name}</p><p className="mt-1 text-xs text-slate-500">{row.departmentName} · {row.task.category}</p></div>
+                  <Badge variant="outline" className="capitalize">{row.task.frequency}</Badge>
+                </div>
+                <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700"><p>{row.task.dueTime} Asia/Kathmandu</p><p className="mt-1 text-xs text-slate-500">{row.task.gracePeriodMinutes}m grace · {row.task.escalationDelayMinutes}m escalation</p></div>
+                <div className="mt-3 flex items-center justify-between gap-3"><div className="flex flex-wrap gap-1">{row.task.evidenceRequired && <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">Evidence</Badge>}{row.task.verificationRequired && <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700">Verify</Badge>}{!row.task.evidenceRequired && !row.task.verificationRequired && <span className="text-xs text-slate-500">Standard response</span>}</div><Button size="sm" variant="outline" onClick={() => configure(row)}><Settings2 className="mr-1.5 h-3.5 w-3.5" />Configure</Button></div>
+              </div>
+            ))}
+            {!rows.length && <p className="py-8 text-center text-sm text-slate-500">No matching department task schedules.</p>}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <Table className="min-w-[1120px]">
               <TableHeader><TableRow>
                 <TableHead>Department</TableHead><TableHead>Task</TableHead>
