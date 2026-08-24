@@ -158,3 +158,7 @@
 - [x] Review the existing expiry-item resolution workflow and add a clear manager action if handled items cannot be removed from active dashboard attention.
 - [x] Add regression coverage and verify department cleanup and expiry resolution on desktop and mobile before publication.
 - [x] Save and publish the verified Verification Unit cleanup and expiry-resolution update.
+- [x] Inspect the requested GitHub Pages URL, repository state, and full-stack build architecture.
+- [x] Design a safe GitHub Pages deployment path that does not expose secrets or break the existing API, database, or sign-in workflow.
+- [x] Implement and validate the approved GitHub Pages configuration or document the required external backend handoff.
+- [x] Publish the verified deployment configuration and report the GitHub Pages URL status and functional limitations.
