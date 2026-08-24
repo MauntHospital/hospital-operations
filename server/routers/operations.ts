@@ -28,6 +28,7 @@ import {
   getRiskRegister,
   getSettings,
   getTaskDetail,
+  resolveExpiryItem,
   getTaskScoringRules,
   getWhatsAppTaskRegister,
   importDutyRosters,
@@ -360,6 +361,9 @@ export const operationsRouter = router({
       })
     )
     .mutation(({ ctx, input }) => createExpiryItem(ctx.user, input)),
+  expiryResolve: protectedProcedure
+    .input(z.object({ expiryItemId: z.number().int().positive() }))
+    .mutation(({ ctx, input }) => resolveExpiryItem(ctx.user, input)),
   maintenanceCreate: protectedProcedure
     .input(
       z.object({

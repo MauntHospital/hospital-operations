@@ -154,3 +154,7 @@
 - [x] Verify task schedules, generated assignments, manager workflows, and imported task counts after replacement.
 - [x] Exclude archived task definitions from active manager task, dashboard, and schedule queries while retaining their historical audit records.
 - [x] Save and publish the verified task-catalogue replacement release and synchronize it with the connected GitHub repository.
+- [x] Inspect and safely remove the Verification Unit after confirming its task, roster, issue, inventory, and audit dependencies.
+- [x] Review the existing expiry-item resolution workflow and add a clear manager action if handled items cannot be removed from active dashboard attention.
+- [x] Add regression coverage and verify department cleanup and expiry resolution on desktop and mobile before publication.
+- [x] Save and publish the verified Verification Unit cleanup and expiry-resolution update.

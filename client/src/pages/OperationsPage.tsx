@@ -2025,6 +2025,22 @@ function EquipmentAndInventory({ mode }: { mode: "equipment" | "inventory" }) {
       utils.operations.dashboard.invalidate();
     },
   });
+  const resolveExpiry = trpc.operations.expiryResolve.useMutation({
+    onSuccess: result => {
+      toast.success(
+        result.alreadyResolved
+          ? "This expiry item is already marked handled."
+          : "Expiry item marked handled and removed from active monitoring."
+      );
+      utils.operations.modules.invalidate();
+      utils.operations.dashboard.invalidate();
+      utils.operations.calendar.invalidate();
+    },
+    onError: error =>
+      toast.error(
+        error.message || "The expiry item could not be marked handled."
+      ),
+  });
   if (modules.isLoading || !modules.data) return <LoadingPanel />;
   if (mode === "equipment")
     return (
@@ -2305,6 +2321,12 @@ function EquipmentAndInventory({ mode }: { mode: "equipment" | "inventory" }) {
         <TabsContent value="expiry" className="mt-4">
           <Card className="border-slate-200 shadow-sm">
             <CardContent className="p-0">
+              {canManage && (
+                <p className="border-b bg-slate-50 px-4 py-2 text-xs text-slate-600 sm:hidden">
+                  Swipe left in the table to reveal the{" "}
+                  <strong>Mark handled</strong> action for each item.
+                </p>
+              )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -2315,6 +2337,9 @@ function EquipmentAndInventory({ mode }: { mode: "equipment" | "inventory" }) {
                       <TableHead>Expiry date</TableHead>
                       <TableHead>Storage</TableHead>
                       <TableHead>Health</TableHead>
+                      {canManage && (
+                        <TableHead className="text-right">Action</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2338,6 +2363,24 @@ function EquipmentAndInventory({ mode }: { mode: "equipment" | "inventory" }) {
                         <TableCell>
                           <StatusBadge status={row.health} />
                         </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={resolveExpiry.isPending}
+                              onClick={() =>
+                                resolveExpiry.mutate({
+                                  expiryItemId: row.expiry.id,
+                                })
+                              }
+                            >
+                              {resolveExpiry.isPending
+                                ? "Saving…"
+                                : "Mark handled"}
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

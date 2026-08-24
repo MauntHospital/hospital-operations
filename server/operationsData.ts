@@ -1006,7 +1006,7 @@ export async function getDashboard(user: User) {
     db.select().from(issues).orderBy(desc(issues.updatedAt)),
     db.select().from(equipment),
     db.select().from(inventory),
-    db.select().from(expiryItems),
+    db.select().from(expiryItems).where(eq(expiryItems.active, true)),
     db.select().from(departments).where(eq(departments.active, true)),
     db
       .select()
@@ -2803,6 +2803,7 @@ export async function getOperationsModules(user: User) {
       .select({ expiry: expiryItems, departmentName: departments.name })
       .from(expiryItems)
       .innerJoin(departments, eq(expiryItems.departmentId, departments.id))
+      .where(eq(expiryItems.active, true))
       .orderBy(asc(expiryItems.expiryDate)),
     db
       .select({
@@ -3255,6 +3256,37 @@ export async function createExpiryItem(
     { name: input.name, expiryDate: input.expiryDate.toISOString() }
   );
   return { id: created[0]!.id };
+}
+
+export async function resolveExpiryItem(
+  user: User,
+  input: { expiryItemId: number }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const item = (
+    await db
+      .select()
+      .from(expiryItems)
+      .where(eq(expiryItems.id, input.expiryItemId))
+      .limit(1)
+  )[0];
+  if (!item)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Expiry item not found.",
+    });
+  if (!item.active) return { alreadyResolved: true };
+
+  await db
+    .update(expiryItems)
+    .set({ active: false })
+    .where(eq(expiryItems.id, input.expiryItemId));
+  await writeAudit(user.id, "expiry_item_handled", "expiry_item", item.id, {
+    name: item.name,
+    priorExpiryDate: item.expiryDate.toISOString(),
+  });
+  return { alreadyResolved: false };
 }
 
 export async function createEquipmentMaintenance(
