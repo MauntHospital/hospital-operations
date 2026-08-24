@@ -1001,7 +1001,8 @@ export async function getDashboard(user: User) {
       .leftJoin(
         whatsappTaskDispatches,
         eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)
-      ),
+      )
+      .where(eq(tasks.active, true)),
     db.select().from(issues).orderBy(desc(issues.updatedAt)),
     db.select().from(equipment),
     db.select().from(inventory),
@@ -1430,11 +1431,14 @@ export async function getMyDay(user: User) {
     .innerJoin(tasks, eq(taskAssignments.taskId, tasks.id))
     .innerJoin(departments, eq(taskAssignments.departmentId, departments.id))
     .where(
-      isAdmin(user)
-        ? undefined
-        : profile
-          ? sql`(${taskAssignments.assignedUserId} = ${user.id} OR ${taskAssignments.departmentId} = ${profile.departmentId})`
-          : eq(taskAssignments.assignedUserId, user.id)
+      and(
+        eq(tasks.active, true),
+        isAdmin(user)
+          ? undefined
+          : profile
+            ? sql`(${taskAssignments.assignedUserId} = ${user.id} OR ${taskAssignments.departmentId} = ${profile.departmentId})`
+            : eq(taskAssignments.assignedUserId, user.id)
+      )
     )
     .orderBy(asc(taskAssignments.dueAt));
   const now = new Date();
@@ -1543,7 +1547,7 @@ export async function getWhatsAppTaskRegister(
       whatsappTaskDispatches,
       eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)
     )
-    .where(taskRegisterScope)
+    .where(and(eq(tasks.active, true), taskRegisterScope))
     .orderBy(asc(taskAssignments.dueAt));
   const scheduleRows = await db
     .select({ task: tasks, department: departments })
@@ -2435,7 +2439,12 @@ export async function getDepartmentTaskSchedules(user: User) {
     .innerJoin(departments, eq(tasks.departmentId, departments.id))
     .leftJoin(users, eq(tasks.assignedUserId, users.id))
     .leftJoin(recurringTasks, eq(recurringTasks.taskId, tasks.id))
-    .where(inArray(tasks.frequency, ["daily", "weekly", "monthly"]))
+    .where(
+      and(
+        eq(tasks.active, true),
+        inArray(tasks.frequency, ["daily", "weekly", "monthly"])
+      )
+    )
     .orderBy(asc(departments.name), asc(tasks.frequency), asc(tasks.name));
 }
 

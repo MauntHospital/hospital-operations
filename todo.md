@@ -148,3 +148,9 @@
 - [x] Add a visible Control Tower shortcut that opens the exact overdue assignments in the manager task register.
 - [x] Add regression coverage and verify the overdue-task shortcut on desktop and mobile before publication.
 - [x] Save and publish the verified Control Tower overdue-task drill-through update.
+- [x] Inspect the uploaded hospital task CSV, current operational task catalogue, dependent records, and GitHub synchronization state.
+- [x] Prepare a validated CSV-to-task mapping and a reversible backup plan before deleting any current task records.
+- [x] Obtain explicit approval for the irreversible task-catalogue replacement, then archive or remove the approved current task records and import the validated CSV tasks.
+- [x] Verify task schedules, generated assignments, manager workflows, and imported task counts after replacement.
+- [x] Exclude archived task definitions from active manager task, dashboard, and schedule queries while retaining their historical audit records.
+- [x] Save and publish the verified task-catalogue replacement release and synchronize it with the connected GitHub repository.
