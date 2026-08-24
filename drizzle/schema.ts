@@ -45,13 +45,38 @@ export const whatsappDispatchStatuses = [
   "prepared",
   "copied",
   "sent",
+  "awaiting_reply",
   "acknowledged",
+  "replied",
+  "under_review",
+  "rework_required",
+  "replied_again",
+  "verified",
   "completed",
   "pending",
   "no_reply",
   "excused",
+  "valid_exception",
+  "overdue",
+  "escalated",
+  "cancelled",
+  "rescheduled",
+  "manager_completed",
   "reviewed",
   "closed",
+] as const;
+export const whatsappResponseStatuses = [
+  "completed",
+  "partially_completed",
+  "not_completed",
+  "unable_to_complete",
+  "valid_exception",
+] as const;
+export const taskAccountabilityParties = [
+  "manager",
+  "department",
+  "shared",
+  "none",
 ] as const;
 export const findingStatuses = [
   "available",
@@ -179,6 +204,13 @@ export const tasks = mysqlTable(
     instructions: text("instructions"),
     managerNotes: text("managerNotes"),
     expectedCompletionMinutes: int("expectedCompletionMinutes"),
+    gracePeriodMinutes: int("gracePeriodMinutes").default(30).notNull(),
+    escalationDelayMinutes: int("escalationDelayMinutes").default(60).notNull(),
+    timezone: varchar("timezone", { length: 64 })
+      .default("Asia/Kathmandu")
+      .notNull(),
+    responseSchema: json("responseSchema"),
+    responsibleRole: varchar("responsibleRole", { length: 120 }),
     escalationRuleId: int("escalationRuleId"),
     operatingDays: json("operatingDays"),
     holidayPolicy: varchar("holidayPolicy", { length: 40 })
@@ -188,6 +220,9 @@ export const tasks = mysqlTable(
     evidenceRequired: boolean("evidenceRequired").default(false).notNull(),
     photoRequired: boolean("photoRequired").default(false).notNull(),
     approvalRequired: boolean("approvalRequired").default(false).notNull(),
+    verificationRequired: boolean("verificationRequired")
+      .default(false)
+      .notNull(),
     active: boolean("active").default(true).notNull(),
     createdBy: int("createdBy").notNull(),
     lastModifiedBy: int("lastModifiedBy"),
@@ -267,13 +302,20 @@ export const whatsappTaskDispatches = mysqlTable(
       .notNull(),
     preparedAt: timestamp("preparedAt"),
     copiedAt: timestamp("copiedAt"),
-    sentAt: timestamp("sentAt").defaultNow().notNull(),
+    sentAt: timestamp("sentAt"),
+    openedAt: timestamp("openedAt"),
     acknowledgedAt: timestamp("acknowledgedAt"),
     respondedAt: timestamp("respondedAt"),
     reviewedAt: timestamp("reviewedAt"),
+    verifiedAt: timestamp("verifiedAt"),
+    escalatedAt: timestamp("escalatedAt"),
+    cancelledAt: timestamp("cancelledAt"),
+    rescheduledAt: timestamp("rescheduledAt"),
     closedAt: timestamp("closedAt"),
     excusedReason: varchar("excusedReason", { length: 120 }),
     responseNote: text("responseNote"),
+    currentResponseId: int("currentResponseId"),
+    statusChangedAt: timestamp("statusChangedAt").defaultNow().notNull(),
     penaltyApplied: boolean("penaltyApplied").default(false).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -293,6 +335,9 @@ export const taskLifecycleEvents = mysqlTable(
     assignmentId: int("assignmentId").notNull(),
     dispatchId: int("dispatchId"),
     eventType: varchar("eventType", { length: 80 }).notNull(),
+    previousStatus: varchar("previousStatus", { length: 80 }),
+    newStatus: varchar("newStatus", { length: 80 }),
+    actorRole: varchar("actorRole", { length: 40 }),
     note: text("note"),
     metadata: json("metadata"),
     recordedByUserId: int("recordedByUserId").notNull(),
@@ -310,6 +355,8 @@ export const taskScoringRules = mysqlTable("taskScoringRules", {
   id: int("id").autoincrement().primaryKey(),
   priority: mysqlEnum("priority", taskPriorities).notNull().unique(),
   weightTenths: int("weightTenths").notNull(),
+  lateWeightTenths: int("lateWeightTenths").default(0).notNull(),
+  escalatedWeightTenths: int("escalatedWeightTenths").default(0).notNull(),
   active: boolean("active").default(true).notNull(),
   updatedByUserId: int("updatedByUserId"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -334,6 +381,157 @@ export const whatsappMessageTemplates = mysqlTable(
   table => ({
     departmentIdx: index("whatsapp_template_department_idx").on(
       table.departmentId
+    ),
+  })
+);
+
+export const whatsappTaskResponses = mysqlTable(
+  "whatsappTaskResponses",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    dispatchId: int("dispatchId").notNull(),
+    assignmentId: int("assignmentId").notNull(),
+    responseStatus: mysqlEnum("responseStatus", whatsappResponseStatuses)
+      .notNull(),
+    findings: text("findings"),
+    actionTaken: text("actionTaken"),
+    responsibleStaff: varchar("responsibleStaff", { length: 220 }),
+    completedAt: timestamp("completedAt"),
+    nonCompletionReason: varchar("nonCompletionReason", { length: 160 }),
+    additionalNotes: text("additionalNotes"),
+    structuredFields: json("structuredFields"),
+    version: int("version").default(1).notNull(),
+    isCurrent: boolean("isCurrent").default(true).notNull(),
+    submittedByUserId: int("submittedByUserId").notNull(),
+    submittedAt: timestamp("submittedAt").defaultNow().notNull(),
+    reviewedByUserId: int("reviewedByUserId"),
+    reviewedAt: timestamp("reviewedAt"),
+    reviewDecision: varchar("reviewDecision", { length: 40 }),
+    reviewNote: text("reviewNote"),
+  },
+  table => ({
+    dispatchIdx: index("whatsapp_response_dispatch_idx").on(table.dispatchId),
+    assignmentIdx: index("whatsapp_response_assignment_idx").on(
+      table.assignmentId
+    ),
+    currentIdx: index("whatsapp_response_current_idx").on(
+      table.dispatchId,
+      table.isCurrent
+    ),
+  })
+);
+
+export const whatsappTaskEvidence = mysqlTable(
+  "whatsappTaskEvidence",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    dispatchId: int("dispatchId").notNull(),
+    responseId: int("responseId"),
+    storageKey: varchar("storageKey", { length: 600 }).notNull(),
+    url: varchar("url", { length: 1024 }).notNull(),
+    fileName: varchar("fileName", { length: 300 }).notNull(),
+    mimeType: varchar("mimeType", { length: 160 }).notNull(),
+    uploadedByUserId: int("uploadedByUserId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    dispatchIdx: index("whatsapp_evidence_dispatch_idx").on(table.dispatchId),
+    responseIdx: index("whatsapp_evidence_response_idx").on(table.responseId),
+  })
+);
+
+export const whatsappTaskEscalations = mysqlTable(
+  "whatsappTaskEscalations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    dispatchId: int("dispatchId"),
+    assignmentId: int("assignmentId").notNull(),
+    escalatedByUserId: int("escalatedByUserId"),
+    escalationLevel: varchar("escalationLevel", { length: 80 }).notNull(),
+    reason: text("reason").notNull(),
+    escalatedTo: varchar("escalatedTo", { length: 220 }),
+    resolution: text("resolution"),
+    resolvedByUserId: int("resolvedByUserId"),
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    assignmentIdx: index("whatsapp_escalation_assignment_idx").on(
+      table.assignmentId
+    ),
+    dispatchIdx: index("whatsapp_escalation_dispatch_idx").on(table.dispatchId),
+  })
+);
+
+export const whatsappTaskReschedules = mysqlTable(
+  "whatsappTaskReschedules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    originalAssignmentId: int("originalAssignmentId").notNull(),
+    successorAssignmentId: int("successorAssignmentId"),
+    previousDueAt: timestamp("previousDueAt").notNull(),
+    rescheduledDueAt: timestamp("rescheduledDueAt").notNull(),
+    reason: text("reason").notNull(),
+    rescheduledByUserId: int("rescheduledByUserId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    originalIdx: index("whatsapp_reschedule_original_idx").on(
+      table.originalAssignmentId
+    ),
+    successorIdx: index("whatsapp_reschedule_successor_idx").on(
+      table.successorAssignmentId
+    ),
+  })
+);
+
+export const taskAccountabilityDecisions = mysqlTable(
+  "taskAccountabilityDecisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    assignmentId: int("assignmentId").notNull(),
+    dispatchId: int("dispatchId"),
+    departmentId: int("departmentId").notNull(),
+    accountableParty: mysqlEnum("accountableParty", taskAccountabilityParties)
+      .notNull(),
+    outcome: varchar("outcome", { length: 80 }).notNull(),
+    pointDeltaTenths: int("pointDeltaTenths").default(0).notNull(),
+    reason: text("reason").notNull(),
+    decidedByUserId: int("decidedByUserId").notNull(),
+    decidedAt: timestamp("decidedAt").defaultNow().notNull(),
+  },
+  table => ({
+    assignmentIdx: index("task_accountability_assignment_idx").on(
+      table.assignmentId
+    ),
+    dispatchIdx: index("task_accountability_dispatch_idx").on(table.dispatchId),
+    departmentIdx: index("task_accountability_department_idx").on(
+      table.departmentId
+    ),
+  })
+);
+
+export const departmentMonthlyScoreSnapshots = mysqlTable(
+  "departmentMonthlyScoreSnapshots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    departmentId: int("departmentId").notNull(),
+    monthKey: varchar("monthKey", { length: 7 }).notNull(),
+    scoreTenths: int("scoreTenths").notNull(),
+    assignedCount: int("assignedCount").default(0).notNull(),
+    completedCount: int("completedCount").default(0).notNull(),
+    lateCount: int("lateCount").default(0).notNull(),
+    overdueCount: int("overdueCount").default(0).notNull(),
+    escalatedCount: int("escalatedCount").default(0).notNull(),
+    validExceptionCount: int("validExceptionCount").default(0).notNull(),
+    compliancePercent: int("compliancePercent").default(100).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    departmentMonthUnique: uniqueIndex("department_month_score_unique").on(
+      table.departmentId,
+      table.monthKey
     ),
   })
 );

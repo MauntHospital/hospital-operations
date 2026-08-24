@@ -7,6 +7,7 @@ import {
   gt,
   inArray,
   isNotNull,
+  isNull,
   lt,
   notInArray,
   sql,
@@ -34,6 +35,7 @@ import {
   shiftHandovers,
   staffProfiles,
   taskAssignments,
+  taskAccountabilityDecisions,
   taskChecklistResults,
   taskChecklists,
   taskCompletions,
@@ -43,9 +45,14 @@ import {
   users,
   managementActions,
   whatsappTaskDispatches,
+  whatsappTaskEscalations,
+  whatsappTaskEvidence,
+  whatsappTaskReschedules,
+  whatsappTaskResponses,
   type User,
 } from "../drizzle/schema";
 import { getDb } from "./db";
+import { storagePut } from "./storage";
 import {
   computeNextDueDate,
   expiryHealth,
@@ -57,6 +64,19 @@ import {
   taskCompletionBlockReason,
   type FindingStatus,
 } from "./operationsLogic";
+import {
+  classifyDispatchTiming,
+  formatHospitalDateTime,
+  hospitalDateAtTime,
+  hospitalDateKey,
+  hospitalMonthKey,
+  initialHospitalDueAt,
+  isAwaitingDepartmentReply,
+  isTerminalDispatchStatus,
+  lifecycleLabel,
+  nextHospitalDueAt,
+  type WhatsAppDispatchStatus,
+} from "./whatsappTaskLifecycle";
 
 const adminRoles = ["super_admin", "hospital_admin"] as const;
 const managerRoles = [
@@ -66,7 +86,7 @@ const managerRoles = [
   "supervisor",
 ] as const;
 
-const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);
+const dateKey = (date = new Date()) => hospitalDateKey(date);
 const pointsFromTenths = (value: number) => value / 10;
 const atTime = (hour: number, minute = 0, offsetDays = 0) => {
   const date = new Date();
@@ -177,6 +197,9 @@ async function writeTaskLifecycleEvent(
     dispatchId?: number | null;
     note?: string | null;
     metadata?: unknown;
+    previousStatus?: string | null;
+    newStatus?: string | null;
+    actorRole?: string | null;
   } = {}
 ) {
   const db = await requireDb();
@@ -184,6 +207,9 @@ async function writeTaskLifecycleEvent(
     assignmentId,
     dispatchId: options.dispatchId ?? null,
     eventType,
+    previousStatus: options.previousStatus ?? null,
+    newStatus: options.newStatus ?? null,
+    actorRole: options.actorRole ?? null,
     note: options.note ?? null,
     metadata: options.metadata ?? null,
     recordedByUserId: userId,
@@ -1476,27 +1502,23 @@ export async function getMyDay(user: User) {
   };
 }
 
-type WhatsAppDispatchOutcome = "completed" | "pending" | "no_reply" | "excused";
-
 function whatsappTaskMessage(input: {
   taskName: string;
   departmentName: string;
   dueAt: Date;
   frequency: string;
+  priority?: string;
+  instructions?: string | null;
+  responsibleRole?: string | null;
 }) {
-  const due = new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(input.dueAt));
+  const due = formatHospitalDateTime(new Date(input.dueAt));
   const cadence =
     input.frequency === "monthly"
       ? "Monthly task"
       : input.frequency === "weekly"
         ? "Weekly task"
         : "Daily task";
-  return `*${input.departmentName} — ${cadence}*\n\nTask: ${input.taskName}\nDue: ${due}\n\nPlease complete this task and reply in this department WhatsApp group by the end of the day with:\n• Completed — brief confirmation\n• Pending — reason and expected completion time\n\nUnresolved or no-reply tasks remain pending for the department and are recorded in the department accountability scorecard.`;
+  return `HOSPITAL OPERATIONS TASK\n${input.departmentName} — ${cadence}\n\nTask: ${input.taskName}\nPriority: ${(input.priority ?? "medium").replace(/^./, value => value.toUpperCase())}\nDue: ${due} (Asia/Kathmandu)${input.responsibleRole ? `\nResponsible: ${input.responsibleRole}` : ""}${input.instructions ? `\n\nInstructions:\n${input.instructions}` : ""}\n\nPlease reply in this department WhatsApp group with:\n1. Completion status\n2. Findings or result\n3. Action taken\n4. Responsible staff member\n5. Completion time or reason it could not be completed\n\nThis message is sent manually by the operations manager. A score decision is made only after manager review of the recorded outcome.`;
 }
 
 export async function getWhatsAppTaskRegister(
@@ -1508,29 +1530,17 @@ export async function getWhatsAppTaskRegister(
   await ensureVersion2Defaults();
   const db = await requireDb();
   const now = new Date();
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayKey = hospitalDateKey(now);
+  const dayStart = hospitalDateAtTime({ dateKey: todayKey, time: "00:00" });
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
-  const assignmentScope =
-    scope === "overdue"
-      ? and(
-          lt(taskAssignments.dueAt, now),
-          notInArray(taskAssignments.status, [
-            "completed",
-            "pending_approval",
-            "skipped",
-            "failed",
-          ])
-        )
-      : and(
-          gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)),
-          lt(taskAssignments.dueAt, dayEnd)
-        );
   const taskRegisterScope =
     scope === "overdue"
-      ? assignmentScope
+      ? eq(tasks.active, true)
       : and(
-          assignmentScope,
+          eq(tasks.active, true),
+          gt(taskAssignments.dueAt, new Date(dayStart.getTime() - 1)),
+          lt(taskAssignments.dueAt, dayEnd),
           inArray(tasks.frequency, ["daily", "weekly", "monthly"])
         );
   const rows = await db
@@ -1549,6 +1559,40 @@ export async function getWhatsAppTaskRegister(
     )
     .where(and(eq(tasks.active, true), taskRegisterScope))
     .orderBy(asc(taskAssignments.dueAt));
+  const scopedRows =
+    scope === "overdue"
+      ? rows.filter(row => {
+          if (row.assignment.status === "completed") return false;
+          if (!row.dispatch)
+            return row.assignment.dueAt.getTime() < now.getTime();
+          if (isTerminalDispatchStatus(row.dispatch.status)) return false;
+          const timing = classifyDispatchTiming({
+            dueAt: row.assignment.dueAt,
+            gracePeriodMinutes: row.task.gracePeriodMinutes,
+            escalationDelayMinutes: row.task.escalationDelayMinutes,
+            status: row.dispatch.status,
+            now,
+          });
+          return timing === "overdue" || timing === "escalated";
+        })
+      : rows;
+  const dispatchIds = scopedRows.flatMap(row =>
+    row.dispatch ? [row.dispatch.id] : []
+  );
+  const currentResponses = dispatchIds.length
+    ? await db
+        .select()
+        .from(whatsappTaskResponses)
+        .where(
+          and(
+            inArray(whatsappTaskResponses.dispatchId, dispatchIds),
+            eq(whatsappTaskResponses.isCurrent, true)
+          )
+        )
+    : [];
+  const responsesByDispatch = new Map(
+    currentResponses.map(response => [response.dispatchId, response])
+  );
   const scheduleRows = await db
     .select({ task: tasks, department: departments })
     .from(tasks)
@@ -1590,7 +1634,9 @@ export async function getWhatsAppTaskRegister(
       const schedules = scheduleRows.filter(
         row => row.task.frequency === frequency
       );
-      const dueToday = rows.filter(row => row.task.frequency === frequency);
+      const dueToday = scopedRows.filter(
+        row => row.task.frequency === frequency
+      );
       return {
         frequency,
         scheduledPlanCount: schedules.length,
@@ -1613,35 +1659,127 @@ export async function getWhatsAppTaskRegister(
   );
   return {
     scope,
-    tasks: rows.map(row => ({
-      ...row,
-      suggestedMessage: whatsappTaskMessage({
-        taskName: row.task.name,
-        departmentName: row.department.name,
-        dueAt: row.assignment.dueAt,
-        frequency: row.task.frequency,
-      }),
-    })),
+    tasks: scopedRows.map(row => {
+      const timing = row.dispatch
+        ? classifyDispatchTiming({
+            dueAt: row.assignment.dueAt,
+            gracePeriodMinutes: row.task.gracePeriodMinutes,
+            escalationDelayMinutes: row.task.escalationDelayMinutes,
+            status: row.dispatch.status,
+            now,
+          })
+        : row.assignment.dueAt < now
+          ? "late"
+          : "on_time";
+      const effectiveStatus = !row.dispatch
+        ? row.assignment.status === "completed"
+          ? "manager_completed"
+          : "scheduled"
+        : isAwaitingDepartmentReply(row.dispatch.status) &&
+            (timing === "overdue" || timing === "escalated")
+          ? timing
+          : row.dispatch.status;
+      const response = row.dispatch
+        ? responsesByDispatch.get(row.dispatch.id) ?? null
+        : null;
+      const actionRequired = [
+        "scheduled",
+        "prepared",
+        "copied",
+        "replied",
+        "replied_again",
+        "under_review",
+        "rework_required",
+        "overdue",
+        "escalated",
+      ].includes(effectiveStatus);
+      return {
+        ...row,
+        response,
+        effectiveStatus,
+        lifecycleLabel: lifecycleLabel(
+          row.dispatch?.status ??
+            (row.assignment.status === "completed"
+              ? "manager_completed"
+              : undefined)
+        ),
+        timing,
+        actionRequired,
+        suggestedMessage: whatsappTaskMessage({
+          taskName: row.task.name,
+          departmentName: row.department.name,
+          dueAt: row.assignment.dueAt,
+          frequency: row.task.frequency,
+          priority: row.task.priority,
+          instructions: row.task.instructions,
+          responsibleRole: row.task.responsibleRole,
+        }),
+      };
+    }),
     scorecards,
     summary: {
-      sent: rows.filter(
-        row =>
-          row.dispatch && !["prepared", "copied"].includes(row.dispatch.status)
+      scheduled: scopedRows.filter(row => !row.dispatch).length,
+      prepared: scopedRows.filter(row =>
+        ["prepared", "copied"].includes(row.dispatch?.status ?? "")
       ).length,
-      completed: rows.filter(
+      sent: scopedRows.filter(row => Boolean(row.dispatch?.sentAt)).length,
+      awaitingReply: scopedRows.filter(row =>
+        isAwaitingDepartmentReply(
+          (row.dispatch?.status ?? "prepared") as WhatsAppDispatchStatus
+        )
+      ).length,
+      replied: scopedRows.filter(row =>
+        ["replied", "replied_again"].includes(row.dispatch?.status ?? "")
+      ).length,
+      underReview: scopedRows.filter(
+        row => row.dispatch?.status === "under_review"
+      ).length,
+      verified: scopedRows.filter(row => row.dispatch?.status === "verified")
+        .length,
+      completed: scopedRows.filter(
         row =>
           row.dispatch?.status === "completed" ||
-          row.dispatch?.status === "reviewed" ||
-          row.dispatch?.status === "closed"
+          (!row.dispatch && row.assignment.status === "completed")
       ).length,
-      pending: rows.filter(row =>
-        ["pending", "no_reply"].includes(row.dispatch?.status ?? "")
+      overdue: scopedRows.filter(row => {
+        if (!row.dispatch) return row.assignment.dueAt < now;
+        const timing = classifyDispatchTiming({
+          dueAt: row.assignment.dueAt,
+          gracePeriodMinutes: row.task.gracePeriodMinutes,
+          escalationDelayMinutes: row.task.escalationDelayMinutes,
+          status: row.dispatch.status,
+          now,
+        });
+        return timing === "overdue";
+      }).length,
+      escalated: scopedRows.filter(row => {
+        if (!row.dispatch) return false;
+        return (
+          row.dispatch.status === "escalated" ||
+          classifyDispatchTiming({
+            dueAt: row.assignment.dueAt,
+            gracePeriodMinutes: row.task.gracePeriodMinutes,
+            escalationDelayMinutes: row.task.escalationDelayMinutes,
+            status: row.dispatch.status,
+            now,
+          }) === "escalated"
+        );
+      }).length,
+      actionRequired: scopedRows.filter(row => {
+        if (!row.dispatch) return row.assignment.status !== "completed";
+        return !isTerminalDispatchStatus(row.dispatch.status);
+      }).length,
+      awaitingAcknowledgement: scopedRows.filter(row =>
+        isAwaitingDepartmentReply(
+          (row.dispatch?.status ?? "prepared") as WhatsAppDispatchStatus
+        )
       ).length,
-      excused: rows.filter(row => row.dispatch?.status === "excused").length,
-      awaitingAcknowledgement: rows.filter(
-        row => row.dispatch?.status === "sent"
+      pending: scopedRows.filter(row =>
+        ["pending", "no_reply", "overdue", "escalated"].includes(
+          row.dispatch?.status ?? ""
+        )
       ).length,
-      notSent: rows.filter(
+      notSent: scopedRows.filter(
         row =>
           row.assignment.status !== "completed" &&
           (!row.dispatch ||
@@ -1651,6 +1789,8 @@ export async function getWhatsAppTaskRegister(
     cadenceSummary,
   };
 }
+
+type WhatsAppDispatchOutcome = "completed" | "pending" | "no_reply" | "excused";
 
 async function getWhatsAppTaskContext(assignmentId: number) {
   const db = await requireDb();
@@ -1797,7 +1937,12 @@ export async function dispatchWhatsAppTask(
   const now = new Date();
   await db
     .update(whatsappTaskDispatches)
-    .set({ status: "sent", sentAt: now, messageText: prepared.messageText })
+    .set({
+      status: "awaiting_reply",
+      sentAt: now,
+      messageText: prepared.messageText,
+      statusChangedAt: now,
+    })
     .where(eq(whatsappTaskDispatches.id, prepared.dispatchId));
   await writeTaskLifecycleEvent(user.id, input.assignmentId, "sent", {
     dispatchId: prepared.dispatchId,
@@ -1840,7 +1985,7 @@ export async function acknowledgeWhatsAppTask(
       message:
         "Confirm the manual WhatsApp send before recording acknowledgement.",
     });
-  if (!["sent", "acknowledged"].includes(dispatch.status))
+  if (!["sent", "awaiting_reply", "acknowledged"].includes(dispatch.status))
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
@@ -1852,6 +1997,7 @@ export async function acknowledgeWhatsAppTask(
       status: "acknowledged",
       acknowledgedAt: new Date(),
       responseNote: input.note?.trim() || dispatch.responseNote,
+      statusChangedAt: new Date(),
     })
     .where(eq(whatsappTaskDispatches.id, dispatch.id));
   await writeTaskLifecycleEvent(
@@ -1880,7 +2026,6 @@ export async function recordWhatsAppTaskOutcome(
   }
 ) {
   ensureManager(user);
-  await ensureVersion2Defaults();
   const db = await requireDb();
   const row = (
     await db
@@ -1896,67 +2041,101 @@ export async function recordWhatsAppTaskOutcome(
       message: "WhatsApp task dispatch not found.",
     });
   const dispatch = row.dispatch;
-  if (!["sent", "acknowledged"].includes(dispatch.status))
+  if (
+    ![
+      "sent",
+      "awaiting_reply",
+      "acknowledged",
+      "overdue",
+      "escalated",
+      "rework_required",
+    ].includes(dispatch.status)
+  )
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
-        "This WhatsApp task already has a recorded outcome. Review or close it instead of replacing the outcome.",
+        "This WhatsApp task cannot receive a response in its current lifecycle state.",
     });
   if (input.outcome === "excused" && !input.excusedReason?.trim())
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Select or record an excused-task reason.",
     });
-  const shouldPenaltyApply =
-    ["pending", "no_reply"].includes(input.outcome) && !dispatch.penaltyApplied;
   const now = new Date();
+  const responseStatus =
+    input.outcome === "completed"
+      ? "completed"
+      : input.outcome === "pending"
+        ? "partially_completed"
+        : input.outcome === "excused"
+          ? "valid_exception"
+          : "not_completed";
+  const priorCurrentResponse = await db
+    .select()
+    .from(whatsappTaskResponses)
+    .where(
+      and(
+        eq(whatsappTaskResponses.dispatchId, dispatch.id),
+        eq(whatsappTaskResponses.isCurrent, true)
+      )
+    )
+    .limit(1);
+  if (priorCurrentResponse[0])
+    await db
+      .update(whatsappTaskResponses)
+      .set({ isCurrent: false })
+      .where(eq(whatsappTaskResponses.id, priorCurrentResponse[0].id));
+  const createdResponse = await db
+    .insert(whatsappTaskResponses)
+    .values({
+      dispatchId: dispatch.id,
+      assignmentId: dispatch.assignmentId,
+      responseStatus,
+      findings: input.note?.trim() || null,
+      nonCompletionReason:
+        input.outcome === "no_reply"
+          ? "No department reply recorded by manager"
+          : input.outcome === "pending"
+            ? input.note?.trim() || "Department reported pending work"
+            : null,
+      additionalNotes: input.note?.trim() || null,
+      version: (priorCurrentResponse[0]?.version ?? 0) + 1,
+      submittedByUserId: user.id,
+    })
+    .$returningId();
+  const nextStatus =
+    input.outcome === "excused" ? "valid_exception" : "under_review";
   await db
     .update(whatsappTaskDispatches)
     .set({
-      status: input.outcome,
+      status: nextStatus,
       respondedAt: now,
       responseNote: input.note?.trim() || null,
       excusedReason:
         input.outcome === "excused" ? input.excusedReason!.trim() : null,
-      penaltyApplied: dispatch.penaltyApplied || shouldPenaltyApply,
+      currentResponseId: createdResponse[0]!.id,
+      statusChangedAt: now,
     })
     .where(eq(whatsappTaskDispatches.id, dispatch.id));
   await db
     .update(taskAssignments)
     .set({
-      status: ["completed", "excused"].includes(input.outcome)
-        ? "completed"
-        : "in_progress",
-      completedAt: ["completed", "excused"].includes(input.outcome)
-        ? now
-        : null,
+      status: input.outcome === "excused" ? "skipped" : "in_progress",
+      completedAt: null,
     })
     .where(eq(taskAssignments.id, dispatch.assignmentId));
-  let penaltyTenths = 0;
-  if (shouldPenaltyApply) {
-    const scoringRule = (
-      await db
-        .select()
-        .from(taskScoringRules)
-        .where(eq(taskScoringRules.priority, row.task.priority))
-        .limit(1)
-    )[0];
-    penaltyTenths = scoringRule?.weightTenths ?? row.task.pointWeightTenths;
-    await db.insert(departmentPointEvents).values({
-      departmentId: dispatch.departmentId,
-      dispatchId: dispatch.id,
-      pointDelta: -penaltyTenths,
-      reason:
-        input.outcome === "no_reply"
-          ? "No end-of-day response to WhatsApp task"
-          : "Task remained pending at end of day",
-      recordedByUserId: user.id,
-    });
-  }
-  await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, input.outcome, {
+  await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, "response_recorded", {
     dispatchId: dispatch.id,
     note: input.note,
-    metadata: { excusedReason: input.excusedReason ?? null, penaltyTenths },
+    previousStatus: dispatch.status,
+    newStatus: nextStatus,
+    actorRole: user.role,
+    metadata: {
+      responseStatus,
+      excusedReason: input.excusedReason ?? null,
+      responseId: createdResponse[0]!.id,
+      legacyOutcome: input.outcome,
+    },
   });
   await writeAudit(
     user.id,
@@ -1965,15 +2144,15 @@ export async function recordWhatsAppTaskOutcome(
     dispatch.id,
     {
       outcome: input.outcome,
-      penaltyApplied: shouldPenaltyApply,
-      penaltyTenths,
+      penaltyApplied: false,
+      responseId: createdResponse[0]!.id,
       excusedReason: input.excusedReason ?? null,
     }
   );
   return {
-    status: input.outcome,
-    penaltyApplied: shouldPenaltyApply,
-    penaltyTenths,
+    status: nextStatus,
+    penaltyApplied: false,
+    penaltyTenths: 0,
   };
 }
 
@@ -2006,8 +2185,10 @@ export async function reviewWhatsAppTask(
       "pending",
       "no_reply",
       "excused",
+      "under_review",
+      "replied",
+      "replied_again",
       "reviewed",
-      "closed",
     ].includes(dispatch.status)
   )
     throw new TRPCError({
@@ -2015,19 +2196,50 @@ export async function reviewWhatsAppTask(
       message: "Record a department outcome before reviewing this task.",
     });
   const now = new Date();
-  const status = input.close ? "closed" : "reviewed";
+  const status =
+    dispatch.status === "under_review" ||
+    dispatch.status === "replied" ||
+    dispatch.status === "replied_again"
+      ? input.close
+        ? "completed"
+        : "verified"
+      : input.close
+        ? "closed"
+        : "reviewed";
   await db
     .update(whatsappTaskDispatches)
     .set({
       status,
       reviewedAt: now,
-      closedAt: input.close ? now : dispatch.closedAt,
+      verifiedAt: status === "verified" ? now : dispatch.verifiedAt,
+      closedAt: ["completed", "closed"].includes(status)
+        ? now
+        : dispatch.closedAt,
       responseNote: input.note?.trim() || dispatch.responseNote,
+      statusChangedAt: now,
     })
     .where(eq(whatsappTaskDispatches.id, dispatch.id));
+  if (status === "completed")
+    await db
+      .update(taskAssignments)
+      .set({ status: "completed", completedAt: now })
+      .where(eq(taskAssignments.id, dispatch.assignmentId));
+  if (dispatch.currentResponseId)
+    await db
+      .update(whatsappTaskResponses)
+      .set({
+        reviewedByUserId: user.id,
+        reviewedAt: now,
+        reviewDecision: status === "completed" ? "verified_and_completed" : status,
+        reviewNote: input.note?.trim() || null,
+      })
+      .where(eq(whatsappTaskResponses.id, dispatch.currentResponseId));
   await writeTaskLifecycleEvent(user.id, dispatch.assignmentId, status, {
     dispatchId: dispatch.id,
     note: input.note,
+    previousStatus: dispatch.status,
+    newStatus: status,
+    actorRole: user.role,
   });
   await writeAudit(
     user.id,
@@ -2037,6 +2249,747 @@ export async function reviewWhatsAppTask(
     { note: input.note }
   );
   return { status };
+}
+
+async function getWhatsAppDispatchWithTask(dispatchId: number) {
+  const db = await requireDb();
+  const row = (
+    await db
+      .select({
+        dispatch: whatsappTaskDispatches,
+        assignment: taskAssignments,
+        task: tasks,
+        department: departments,
+      })
+      .from(whatsappTaskDispatches)
+      .innerJoin(
+        taskAssignments,
+        eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)
+      )
+      .innerJoin(tasks, eq(whatsappTaskDispatches.taskId, tasks.id))
+      .innerJoin(departments, eq(whatsappTaskDispatches.departmentId, departments.id))
+      .where(eq(whatsappTaskDispatches.id, dispatchId))
+      .limit(1)
+  )[0];
+  if (!row)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "WhatsApp task dispatch not found.",
+    });
+  return row;
+}
+
+async function recordAccountabilityDecision(input: {
+  user: User;
+  dispatchId: number;
+  assignmentId: number;
+  departmentId: number;
+  priority: (typeof tasks.$inferSelect)["priority"];
+  outcome: string;
+  accountableParty: "manager" | "department" | "shared" | "none";
+  reason: string;
+  pointDeltaTenths?: number;
+}) {
+  const db = await requireDb();
+  const existing = (
+    await db
+      .select()
+      .from(taskAccountabilityDecisions)
+      .where(eq(taskAccountabilityDecisions.dispatchId, input.dispatchId))
+      .limit(1)
+  )[0];
+  if (existing) return existing;
+  const pointDeltaTenths = input.pointDeltaTenths ?? 0;
+  const created = await db
+    .insert(taskAccountabilityDecisions)
+    .values({
+      assignmentId: input.assignmentId,
+      dispatchId: input.dispatchId,
+      departmentId: input.departmentId,
+      accountableParty: input.accountableParty,
+      outcome: input.outcome,
+      pointDeltaTenths,
+      reason: input.reason,
+      decidedByUserId: input.user.id,
+    })
+    .$returningId();
+  if (pointDeltaTenths !== 0) {
+    const existingPointEvent = (
+      await db
+        .select()
+        .from(departmentPointEvents)
+        .where(eq(departmentPointEvents.dispatchId, input.dispatchId))
+        .limit(1)
+    )[0];
+    if (!existingPointEvent)
+      await db.insert(departmentPointEvents).values({
+        departmentId: input.departmentId,
+        dispatchId: input.dispatchId,
+        pointDelta: pointDeltaTenths,
+        reason: input.reason.slice(0, 240),
+        recordedByUserId: input.user.id,
+      });
+  }
+  return { id: created[0]!.id, pointDeltaTenths };
+}
+
+export async function recordWhatsAppTaskResponse(
+  user: User,
+  input: {
+    dispatchId: number;
+    responseStatus:
+      | "completed"
+      | "partially_completed"
+      | "not_completed"
+      | "unable_to_complete"
+      | "valid_exception";
+    findings?: string;
+    actionTaken?: string;
+    responsibleStaff?: string;
+    completedAt?: Date;
+    nonCompletionReason?: string;
+    additionalNotes?: string;
+    structuredFields?: Record<string, string | number | boolean | null>;
+  }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (
+    ![
+      "sent",
+      "awaiting_reply",
+      "acknowledged",
+      "overdue",
+      "escalated",
+      "rework_required",
+    ].includes(row.dispatch.status)
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "A response can be recorded only after a manager confirms the manual WhatsApp send.",
+    });
+  if (
+    ["not_completed", "unable_to_complete"].includes(input.responseStatus) &&
+    !input.nonCompletionReason?.trim()
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Record a reason when the department could not complete a task.",
+    });
+  const existing = (
+    await db
+      .select()
+      .from(whatsappTaskResponses)
+      .where(
+        and(
+          eq(whatsappTaskResponses.dispatchId, row.dispatch.id),
+          eq(whatsappTaskResponses.isCurrent, true)
+        )
+      )
+      .limit(1)
+  )[0];
+  if (existing)
+    await db
+      .update(whatsappTaskResponses)
+      .set({ isCurrent: false })
+      .where(eq(whatsappTaskResponses.id, existing.id));
+  const now = new Date();
+  const response = await db
+    .insert(whatsappTaskResponses)
+    .values({
+      dispatchId: row.dispatch.id,
+      assignmentId: row.assignment.id,
+      responseStatus: input.responseStatus,
+      findings: input.findings?.trim() || null,
+      actionTaken: input.actionTaken?.trim() || null,
+      responsibleStaff: input.responsibleStaff?.trim() || null,
+      completedAt: input.completedAt ?? null,
+      nonCompletionReason: input.nonCompletionReason?.trim() || null,
+      additionalNotes: input.additionalNotes?.trim() || null,
+      structuredFields: input.structuredFields ?? null,
+      version: (existing?.version ?? 0) + 1,
+      submittedByUserId: user.id,
+    })
+    .$returningId();
+  const nextStatus =
+    row.dispatch.status === "rework_required" ? "replied_again" : "replied";
+  await db
+    .update(whatsappTaskDispatches)
+    .set({
+      status: nextStatus,
+      respondedAt: now,
+      currentResponseId: response[0]!.id,
+      responseNote: input.additionalNotes?.trim() || null,
+      statusChangedAt: now,
+    })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "response_recorded", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: nextStatus,
+    actorRole: user.role,
+    note: input.additionalNotes,
+    metadata: { responseId: response[0]!.id, responseStatus: input.responseStatus },
+  });
+  return { responseId: response[0]!.id, status: nextStatus };
+}
+
+export async function submitWhatsAppTaskForReview(
+  user: User,
+  input: { dispatchId: number }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (!["replied", "replied_again"].includes(row.dispatch.status))
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Record a department response before submitting it for review.",
+    });
+  if (row.task.evidenceRequired) {
+    const evidence = await db
+      .select({ id: whatsappTaskEvidence.id })
+      .from(whatsappTaskEvidence)
+      .where(eq(whatsappTaskEvidence.dispatchId, row.dispatch.id))
+      .limit(1);
+    if (!evidence[0])
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This task requires evidence before manager review.",
+      });
+  }
+  const now = new Date();
+  await db
+    .update(whatsappTaskDispatches)
+    .set({ status: "under_review", reviewedAt: now, statusChangedAt: now })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "submitted_for_review", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: "under_review",
+    actorRole: user.role,
+  });
+  return { status: "under_review" as const };
+}
+
+export async function decideWhatsAppTaskReview(
+  user: User,
+  input: {
+    dispatchId: number;
+    decision: "verify" | "rework" | "valid_exception" | "department_failure";
+    note: string;
+  }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (row.dispatch.status !== "under_review")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only a response under review can receive a manager decision.",
+    });
+  if (!input.note.trim())
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Record a concise manager decision note.",
+    });
+  const now = new Date();
+  const responseId = row.dispatch.currentResponseId;
+  if (!responseId)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The response record is unavailable for this review.",
+    });
+  const nextStatus =
+    input.decision === "verify"
+      ? "verified"
+      : input.decision === "rework"
+        ? "rework_required"
+        : input.decision === "valid_exception"
+          ? "valid_exception"
+          : "closed";
+  const assignmentStatus =
+    input.decision === "department_failure"
+      ? "failed"
+      : input.decision === "valid_exception"
+        ? "skipped"
+        : "in_progress";
+  await db
+    .update(whatsappTaskDispatches)
+    .set({
+      status: nextStatus,
+      reviewedAt: now,
+      verifiedAt: input.decision === "verify" ? now : null,
+      closedAt: input.decision === "department_failure" ? now : null,
+      responseNote: input.note.trim(),
+      statusChangedAt: now,
+    })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await db
+    .update(whatsappTaskResponses)
+    .set({
+      reviewedByUserId: user.id,
+      reviewedAt: now,
+      reviewDecision: input.decision,
+      reviewNote: input.note.trim(),
+    })
+    .where(eq(whatsappTaskResponses.id, responseId));
+  await db
+    .update(taskAssignments)
+    .set({
+      status: assignmentStatus,
+      completedAt: null,
+    })
+    .where(eq(taskAssignments.id, row.assignment.id));
+  let pointDeltaTenths = 0;
+  if (input.decision === "department_failure") {
+    const rule = (
+      await db
+        .select()
+        .from(taskScoringRules)
+        .where(eq(taskScoringRules.priority, row.task.priority))
+        .limit(1)
+    )[0];
+    const timing = classifyDispatchTiming({
+      dueAt: row.assignment.dueAt,
+      gracePeriodMinutes: row.task.gracePeriodMinutes,
+      escalationDelayMinutes: row.task.escalationDelayMinutes,
+      status: row.dispatch.status,
+      now,
+    });
+    const configuredWeight =
+      timing === "escalated"
+        ? rule?.escalatedWeightTenths
+        : timing === "late" || timing === "overdue"
+          ? rule?.lateWeightTenths
+          : rule?.weightTenths;
+    pointDeltaTenths = -(configuredWeight || row.task.pointWeightTenths);
+  }
+  await recordAccountabilityDecision({
+    user,
+    dispatchId: row.dispatch.id,
+    assignmentId: row.assignment.id,
+    departmentId: row.department.id,
+    priority: row.task.priority,
+    outcome: input.decision,
+    accountableParty:
+      input.decision === "department_failure" ? "department" : "none",
+    pointDeltaTenths,
+    reason: input.note.trim(),
+  });
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "manager_review_decision", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: nextStatus,
+    actorRole: user.role,
+    note: input.note.trim(),
+    metadata: { decision: input.decision, pointDeltaTenths },
+  });
+  return { status: nextStatus, pointDeltaTenths };
+}
+
+export async function completeVerifiedWhatsAppTask(
+  user: User,
+  input: { dispatchId: number; note?: string }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (row.dispatch.status !== "verified")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only a verified department response can complete a WhatsApp task.",
+    });
+  const now = new Date();
+  await db
+    .update(whatsappTaskDispatches)
+    .set({
+      status: "completed",
+      closedAt: now,
+      responseNote: input.note?.trim() || row.dispatch.responseNote,
+      statusChangedAt: now,
+    })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await db
+    .update(taskAssignments)
+    .set({ status: "completed", completedAt: now })
+    .where(eq(taskAssignments.id, row.assignment.id));
+  await recordAccountabilityDecision({
+    user,
+    dispatchId: row.dispatch.id,
+    assignmentId: row.assignment.id,
+    departmentId: row.department.id,
+    priority: row.task.priority,
+    outcome: "verified_completion",
+    accountableParty: "none",
+    reason: input.note?.trim() || "Verified completion",
+  });
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "completed", {
+    dispatchId: row.dispatch.id,
+    previousStatus: "verified",
+    newStatus: "completed",
+    actorRole: user.role,
+    note: input.note,
+  });
+  return { status: "completed" as const };
+}
+
+export async function recordWhatsAppTaskOpened(
+  user: User,
+  input: { dispatchId: number }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (!["prepared", "copied"].includes(row.dispatch.status))
+    return { status: row.dispatch.status, alreadyOpened: true };
+  const now = new Date();
+  await db
+    .update(whatsappTaskDispatches)
+    .set({ openedAt: now, statusChangedAt: now })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "whatsapp_opened", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: row.dispatch.status,
+    actorRole: user.role,
+  });
+  return { status: row.dispatch.status, alreadyOpened: false };
+}
+
+export async function escalateWhatsAppTask(
+  user: User,
+  input: {
+    dispatchId: number;
+    reason: string;
+    escalationLevel?: string;
+    escalatedTo?: string;
+  }
+) {
+  ensureManager(user);
+  if (!input.reason.trim())
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Record why this task is being escalated.",
+    });
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (isTerminalDispatchStatus(row.dispatch.status))
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A closed or excepted task cannot be escalated.",
+    });
+  const recent = (
+    await db
+      .select()
+      .from(whatsappTaskEscalations)
+      .where(
+        and(
+          eq(whatsappTaskEscalations.dispatchId, row.dispatch.id),
+          isNull(whatsappTaskEscalations.resolvedAt)
+        )
+      )
+      .limit(1)
+  )[0];
+  if (recent)
+    return { escalationId: recent.id, status: "escalated" as const, duplicate: true };
+  const now = new Date();
+  const escalation = await db
+    .insert(whatsappTaskEscalations)
+    .values({
+      dispatchId: row.dispatch.id,
+      assignmentId: row.assignment.id,
+      escalatedByUserId: user.id,
+      escalationLevel: input.escalationLevel?.trim() || "manager",
+      reason: input.reason.trim(),
+      escalatedTo: input.escalatedTo?.trim() || null,
+    })
+    .$returningId();
+  await db
+    .update(whatsappTaskDispatches)
+    .set({ status: "escalated", escalatedAt: now, statusChangedAt: now })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await db
+    .update(taskAssignments)
+    .set({ status: "overdue" })
+    .where(eq(taskAssignments.id, row.assignment.id));
+  await db.insert(notifications).values({
+    departmentId: row.department.id,
+    type: "overdue_task",
+    title: "WhatsApp task escalated",
+    body: `${row.task.name} has been escalated: ${input.reason.trim()}`,
+    entityType: "whatsapp_dispatch",
+    entityId: row.dispatch.id,
+  });
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "escalated", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: "escalated",
+    actorRole: user.role,
+    note: input.reason.trim(),
+    metadata: { escalationId: escalation[0]!.id, escalatedTo: input.escalatedTo ?? null },
+  });
+  return { escalationId: escalation[0]!.id, status: "escalated" as const, duplicate: false };
+}
+
+export async function cancelWhatsAppTask(
+  user: User,
+  input: { dispatchId: number; reason: string }
+) {
+  ensureManager(user);
+  if (!input.reason.trim())
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Record the cancellation reason for the audit history.",
+    });
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (isTerminalDispatchStatus(row.dispatch.status))
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This WhatsApp task has already reached a terminal state.",
+    });
+  const now = new Date();
+  await db
+    .update(whatsappTaskDispatches)
+    .set({
+      status: "cancelled",
+      cancelledAt: now,
+      responseNote: input.reason.trim(),
+      statusChangedAt: now,
+    })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await db
+    .update(taskAssignments)
+    .set({ status: "skipped", completedAt: null })
+    .where(eq(taskAssignments.id, row.assignment.id));
+  await recordAccountabilityDecision({
+    user,
+    dispatchId: row.dispatch.id,
+    assignmentId: row.assignment.id,
+    departmentId: row.department.id,
+    priority: row.task.priority,
+    outcome: "cancelled",
+    accountableParty: "none",
+    reason: input.reason.trim(),
+  });
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "cancelled", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: "cancelled",
+    actorRole: user.role,
+    note: input.reason.trim(),
+  });
+  return { status: "cancelled" as const };
+}
+
+export async function rescheduleWhatsAppTask(
+  user: User,
+  input: { dispatchId: number; rescheduledDueAt: Date; reason: string }
+) {
+  ensureManager(user);
+  if (!input.reason.trim())
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Record why the task deadline is being rescheduled.",
+    });
+  if (input.rescheduledDueAt.getTime() <= Date.now())
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose a future deadline when rescheduling a task.",
+    });
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (isTerminalDispatchStatus(row.dispatch.status))
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This WhatsApp task has already reached a terminal state.",
+    });
+  const duplicate = (
+    await db
+      .select({ id: taskAssignments.id })
+      .from(taskAssignments)
+      .where(
+        and(
+          eq(taskAssignments.taskId, row.task.id),
+          eq(taskAssignments.dueAt, input.rescheduledDueAt)
+        )
+      )
+      .limit(1)
+  )[0];
+  if (duplicate)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "An assignment already exists for this task at the selected deadline.",
+    });
+  const successor = await db
+    .insert(taskAssignments)
+    .values({
+      taskId: row.task.id,
+      departmentId: row.department.id,
+      assignedUserId: row.assignment.assignedUserId,
+      dueAt: input.rescheduledDueAt,
+      status: "not_started",
+    })
+    .$returningId();
+  const now = new Date();
+  await db
+    .insert(whatsappTaskReschedules)
+    .values({
+      originalAssignmentId: row.assignment.id,
+      successorAssignmentId: successor[0]!.id,
+      previousDueAt: row.assignment.dueAt,
+      rescheduledDueAt: input.rescheduledDueAt,
+      reason: input.reason.trim(),
+      rescheduledByUserId: user.id,
+    });
+  await db
+    .update(whatsappTaskDispatches)
+    .set({
+      status: "rescheduled",
+      rescheduledAt: now,
+      responseNote: input.reason.trim(),
+      statusChangedAt: now,
+    })
+    .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+  await db
+    .update(taskAssignments)
+    .set({ status: "skipped", completedAt: null })
+    .where(eq(taskAssignments.id, row.assignment.id));
+  await recordAccountabilityDecision({
+    user,
+    dispatchId: row.dispatch.id,
+    assignmentId: row.assignment.id,
+    departmentId: row.department.id,
+    priority: row.task.priority,
+    outcome: "rescheduled",
+    accountableParty: "none",
+    reason: input.reason.trim(),
+  });
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "rescheduled", {
+    dispatchId: row.dispatch.id,
+    previousStatus: row.dispatch.status,
+    newStatus: "rescheduled",
+    actorRole: user.role,
+    note: input.reason.trim(),
+    metadata: { successorAssignmentId: successor[0]!.id, rescheduledDueAt: input.rescheduledDueAt.toISOString() },
+  });
+  await writeTaskLifecycleEvent(user.id, successor[0]!.id, "rescheduled_successor_created", {
+    note: input.reason.trim(),
+    actorRole: user.role,
+    metadata: { originalAssignmentId: row.assignment.id },
+  });
+  return { status: "rescheduled" as const, successorAssignmentId: successor[0]!.id };
+}
+
+export async function uploadWhatsAppTaskEvidence(
+  user: User,
+  input: {
+    dispatchId: number;
+    fileName: string;
+    mimeType: string;
+    base64Data: string;
+  }
+) {
+  ensureManager(user);
+  const db = await requireDb();
+  const row = await getWhatsAppDispatchWithTask(input.dispatchId);
+  if (!row.dispatch.sentAt)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Evidence can be attached only after a manager confirms the manual send.",
+    });
+  if (
+    !input.mimeType.startsWith("image/") &&
+    input.mimeType !== "application/pdf"
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Evidence must be an image or PDF document.",
+    });
+  const payload = input.base64Data.includes(",")
+    ? input.base64Data.split(",").at(-1)!
+    : input.base64Data;
+  const bytes = Buffer.from(payload, "base64");
+  if (!bytes.length || bytes.length > 8 * 1024 * 1024)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Evidence must be a non-empty file no larger than 8 MB.",
+    });
+  const safeFileName = input.fileName
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .slice(0, 160);
+  const { key, url } = await storagePut(
+    `whatsapp-task-evidence/${row.dispatch.id}/${Date.now()}-${safeFileName}`,
+    bytes,
+    input.mimeType
+  );
+  const evidence = await db
+    .insert(whatsappTaskEvidence)
+    .values({
+      dispatchId: row.dispatch.id,
+      responseId: row.dispatch.currentResponseId,
+      storageKey: key,
+      url,
+      fileName: safeFileName || "evidence",
+      mimeType: input.mimeType,
+      uploadedByUserId: user.id,
+    })
+    .$returningId();
+  await writeTaskLifecycleEvent(user.id, row.assignment.id, "evidence_attached", {
+    dispatchId: row.dispatch.id,
+    actorRole: user.role,
+    metadata: { evidenceId: evidence[0]!.id, fileName: safeFileName, mimeType: input.mimeType },
+  });
+  return { evidenceId: evidence[0]!.id, url };
+}
+
+export async function getWhatsAppTaskHistory(user: User, assignmentId: number) {
+  ensureManager(user);
+  const db = await requireDb();
+  const context = await getWhatsAppTaskContext(assignmentId);
+  const dispatch = (
+    await db
+      .select()
+      .from(whatsappTaskDispatches)
+      .where(eq(whatsappTaskDispatches.assignmentId, assignmentId))
+      .limit(1)
+  )[0] ?? null;
+  const [events, responses, evidence, escalations, reschedules] = await Promise.all([
+    db
+      .select()
+      .from(taskLifecycleEvents)
+      .where(eq(taskLifecycleEvents.assignmentId, assignmentId))
+      .orderBy(asc(taskLifecycleEvents.createdAt)),
+    dispatch
+      ? db
+          .select()
+          .from(whatsappTaskResponses)
+          .where(eq(whatsappTaskResponses.dispatchId, dispatch.id))
+          .orderBy(asc(whatsappTaskResponses.version))
+      : Promise.resolve([]),
+    dispatch
+      ? db
+          .select()
+          .from(whatsappTaskEvidence)
+          .where(eq(whatsappTaskEvidence.dispatchId, dispatch.id))
+          .orderBy(asc(whatsappTaskEvidence.createdAt))
+      : Promise.resolve([]),
+    db
+      .select()
+      .from(whatsappTaskEscalations)
+      .where(eq(whatsappTaskEscalations.assignmentId, assignmentId))
+      .orderBy(asc(whatsappTaskEscalations.createdAt)),
+    db
+      .select()
+      .from(whatsappTaskReschedules)
+      .where(eq(whatsappTaskReschedules.originalAssignmentId, assignmentId))
+      .orderBy(asc(whatsappTaskReschedules.createdAt)),
+  ]);
+  return { context, dispatch, events, responses, evidence, escalations, reschedules };
 }
 
 export async function getTaskDetail(user: User, assignmentId: number) {
@@ -2333,6 +3286,17 @@ export async function completeTaskDirectlyByManager(
         completedAt: new Date(),
       },
     });
+  await writeTaskLifecycleEvent(
+    user.id,
+    input.assignmentId,
+    "manager_completed",
+    {
+      newStatus: "manager_completed",
+      actorRole: user.role,
+      note: notes,
+      metadata: { directManagerCompletion: true, whatsappDistributed: false },
+    }
+  );
   await writeAudit(
     user.id,
     "task_completed_directly_by_manager",
@@ -2341,6 +3305,69 @@ export async function completeTaskDirectlyByManager(
     { directManagerCompletion: true, whatsappDistributed: false }
   );
   return { status: "completed" as const, alreadyCompleted: false };
+}
+
+export async function updateTaskScheduleConfiguration(
+  user: User,
+  input: {
+    taskId: number;
+    dueTime: string;
+    gracePeriodMinutes: number;
+    escalationDelayMinutes: number;
+    evidenceRequired: boolean;
+    verificationRequired: boolean;
+    responsibleRole?: string;
+    responseFields?: string[];
+  }
+) {
+  ensureSuperAdmin(user);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.dueTime))
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Due time must use 24-hour HH:MM format.",
+    });
+  if (input.escalationDelayMinutes < input.gracePeriodMinutes)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Escalation must occur at or after the configured grace period.",
+    });
+  const db = await requireDb();
+  const task = (
+    await db.select().from(tasks).where(eq(tasks.id, input.taskId)).limit(1)
+  )[0];
+  if (!task)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Task schedule not found." });
+  await db
+    .update(tasks)
+    .set({
+      dueTime: input.dueTime,
+      gracePeriodMinutes: input.gracePeriodMinutes,
+      escalationDelayMinutes: input.escalationDelayMinutes,
+      timezone: "Asia/Kathmandu",
+      evidenceRequired: input.evidenceRequired,
+      verificationRequired: input.verificationRequired,
+      responsibleRole: input.responsibleRole?.trim() || null,
+      responseSchema: input.responseFields?.filter(Boolean) ?? null,
+      lastModifiedBy: user.id,
+    })
+    .where(eq(tasks.id, input.taskId));
+  await writeAudit(user.id, "task_schedule_configuration_updated", "task", task.id, {
+    before: {
+      dueTime: task.dueTime,
+      gracePeriodMinutes: task.gracePeriodMinutes,
+      escalationDelayMinutes: task.escalationDelayMinutes,
+      evidenceRequired: task.evidenceRequired,
+      verificationRequired: task.verificationRequired,
+    },
+    after: {
+      dueTime: input.dueTime,
+      gracePeriodMinutes: input.gracePeriodMinutes,
+      escalationDelayMinutes: input.escalationDelayMinutes,
+      evidenceRequired: input.evidenceRequired,
+      verificationRequired: input.verificationRequired,
+    },
+  });
+  return { success: true };
 }
 
 export async function createTask(
@@ -2398,11 +3425,11 @@ export async function createTask(
         required: true,
       }))
     );
-  const dueAt = initialTaskDueDate(
-    input.frequency,
-    input.dueTime,
-    weeklyDay ?? "saturday"
-  );
+  const dueAt = initialHospitalDueAt({
+    frequency: input.frequency,
+    dueTime: input.dueTime,
+    weeklyDay: weeklyDay ?? "saturday",
+  });
   const assignment = await db
     .insert(taskAssignments)
     .values({
@@ -2415,7 +3442,11 @@ export async function createTask(
   if (input.frequency !== "one_time")
     await db.insert(recurringTasks).values({
       taskId,
-      nextRunAt: computeNextDueDate(input.frequency, dueAt),
+      nextRunAt: nextHospitalDueAt({
+        frequency: input.frequency,
+        currentDueAt: dueAt,
+        dueTime: input.dueTime,
+      }),
     });
   await writeAudit(user.id, "task_created", "task", taskId, {
     assignmentId: assignment[0]!.id,
@@ -2999,11 +4030,11 @@ export async function getReports(user: User) {
       respondedCount: dispatchTimingRows.filter(row => row.respondedAt).length,
       averageAcknowledgementMinutes: (() => {
         const values = dispatchTimingRows
-          .filter(row => row.acknowledgedAt)
+          .filter(row => row.acknowledgedAt && row.sentAt)
           .map(
             row =>
               (new Date(row.acknowledgedAt!).getTime() -
-                new Date(row.sentAt).getTime()) /
+                new Date(row.sentAt!).getTime()) /
               60_000
           );
         return values.length
@@ -3014,11 +4045,11 @@ export async function getReports(user: User) {
       })(),
       averageResponseMinutes: (() => {
         const values = dispatchTimingRows
-          .filter(row => row.respondedAt)
+          .filter(row => row.respondedAt && row.sentAt)
           .map(
             row =>
               (new Date(row.respondedAt!).getTime() -
-                new Date(row.sentAt).getTime()) /
+                new Date(row.sentAt!).getTime()) /
               60_000
           );
         return values.length
@@ -3995,9 +5026,11 @@ export async function runOperationalCycle() {
     const scheduledDate = dateKey(row.recurring.nextRunAt);
     if (row.recurring.lastGeneratedFor === today || scheduledDate > today)
       continue;
-    const [hour, minute] = row.task.dueTime.split(":").map(Number);
-    const dueAt = new Date(row.recurring.nextRunAt);
-    dueAt.setHours(hour ?? 0, minute ?? 0, 0, 0);
+    const dueAt = hospitalDateAtTime({
+      dateKey: scheduledDate,
+      time: row.task.dueTime,
+      timeZone: row.task.timezone,
+    });
     await db
       .insert(taskAssignments)
       .values({
@@ -4011,14 +5044,23 @@ export async function runOperationalCycle() {
       .update(recurringTasks)
       .set({
         lastGeneratedFor: today,
-        nextRunAt: computeNextDueDate(row.task.frequency, dueAt),
+        nextRunAt: nextHospitalDueAt({
+          frequency: row.task.frequency,
+          currentDueAt: dueAt,
+          dueTime: row.task.dueTime,
+          timeZone: row.task.timezone,
+        }),
       })
       .where(eq(recurringTasks.id, row.recurring.id));
     generatedAssignments += 1;
   }
   const overdueCandidates = await db
-    .select()
+    .select({ assignment: taskAssignments })
     .from(taskAssignments)
+    .leftJoin(
+      whatsappTaskDispatches,
+      eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)
+    )
     .where(
       and(
         lt(taskAssignments.dueAt, now),
@@ -4026,10 +5068,11 @@ export async function runOperationalCycle() {
           "not_started",
           "in_progress",
           "reopened",
-        ])
+        ]),
+        isNull(whatsappTaskDispatches.id)
       )
     );
-  for (const assignment of overdueCandidates) {
+  for (const { assignment } of overdueCandidates) {
     await db
       .update(taskAssignments)
       .set({ status: "overdue" })
@@ -4054,6 +5097,113 @@ export async function runOperationalCycle() {
         assignment.id,
         { ruleId: rule?.id ?? null, dueAt: assignment.dueAt.toISOString() }
       );
+    }
+  }
+  const whatsappCandidates = await db
+    .select({
+      assignment: taskAssignments,
+      task: tasks,
+      dispatch: whatsappTaskDispatches,
+    })
+    .from(whatsappTaskDispatches)
+    .innerJoin(
+      taskAssignments,
+      eq(whatsappTaskDispatches.assignmentId, taskAssignments.id)
+    )
+    .innerJoin(tasks, eq(whatsappTaskDispatches.taskId, tasks.id))
+    .where(and(eq(tasks.active, true), lt(taskAssignments.dueAt, now)));
+  let whatsappMarkedOverdue = 0;
+  let whatsappEscalated = 0;
+  for (const row of whatsappCandidates) {
+    if (isTerminalDispatchStatus(row.dispatch.status)) continue;
+    const timing = classifyDispatchTiming({
+      dueAt: row.assignment.dueAt,
+      gracePeriodMinutes: row.task.gracePeriodMinutes,
+      escalationDelayMinutes: row.task.escalationDelayMinutes,
+      status: row.dispatch.status,
+      now,
+    });
+    if (timing === "on_time" || timing === "late") continue;
+    if (timing === "overdue" && row.dispatch.status !== "overdue") {
+      await db
+        .update(whatsappTaskDispatches)
+        .set({ status: "overdue", statusChangedAt: now })
+        .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+      await db
+        .update(taskAssignments)
+        .set({ status: "overdue" })
+        .where(eq(taskAssignments.id, row.assignment.id));
+      await writeTaskLifecycleEvent(
+        row.dispatch.sentByUserId,
+        row.assignment.id,
+        "overdue_after_grace",
+        {
+          dispatchId: row.dispatch.id,
+          previousStatus: row.dispatch.status,
+          newStatus: "overdue",
+          actorRole: "system_cycle",
+          metadata: {
+            automatic: true,
+            gracePeriodMinutes: row.task.gracePeriodMinutes,
+          },
+        }
+      );
+      whatsappMarkedOverdue += 1;
+      continue;
+    }
+    if (timing === "escalated" && row.dispatch.status !== "escalated") {
+      const existingEscalation = (
+        await db
+          .select({ id: whatsappTaskEscalations.id })
+          .from(whatsappTaskEscalations)
+          .where(
+            and(
+              eq(whatsappTaskEscalations.dispatchId, row.dispatch.id),
+              isNull(whatsappTaskEscalations.resolvedAt)
+            )
+          )
+          .limit(1)
+      )[0];
+      if (!existingEscalation)
+        await db.insert(whatsappTaskEscalations).values({
+          dispatchId: row.dispatch.id,
+          assignmentId: row.assignment.id,
+          escalationLevel: "automatic",
+          reason: `Automatic escalation after ${row.task.escalationDelayMinutes} minutes from the configured due time.`,
+        });
+      await db
+        .update(whatsappTaskDispatches)
+        .set({ status: "escalated", escalatedAt: now, statusChangedAt: now })
+        .where(eq(whatsappTaskDispatches.id, row.dispatch.id));
+      await db
+        .update(taskAssignments)
+        .set({ status: "overdue" })
+        .where(eq(taskAssignments.id, row.assignment.id));
+      if (!existingEscalation)
+        await db.insert(notifications).values({
+          departmentId: row.assignment.departmentId,
+          type: "overdue_task",
+          title: "WhatsApp task automatically escalated",
+          body: `${row.task.name} exceeded its task-specific escalation threshold. Manager review is required before any score deduction.`,
+          entityType: "whatsapp_dispatch",
+          entityId: row.dispatch.id,
+        });
+      await writeTaskLifecycleEvent(
+        row.dispatch.sentByUserId,
+        row.assignment.id,
+        "automatically_escalated",
+        {
+          dispatchId: row.dispatch.id,
+          previousStatus: row.dispatch.status,
+          newStatus: "escalated",
+          actorRole: "system_cycle",
+          metadata: {
+            automatic: true,
+            escalationDelayMinutes: row.task.escalationDelayMinutes,
+          },
+        }
+      );
+      whatsappEscalated += 1;
     }
   }
   const overdueIssues = await db
@@ -4097,7 +5247,9 @@ export async function runOperationalCycle() {
   }
   return {
     generatedAssignments,
-    markedOverdue: overdueCandidates.length,
+    markedOverdue: overdueCandidates.length + whatsappMarkedOverdue,
+    whatsappMarkedOverdue,
+    whatsappEscalated,
     escalatedIssues: overdueIssues.length,
     processedAt: now.toISOString(),
   };

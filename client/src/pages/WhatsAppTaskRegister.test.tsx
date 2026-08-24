@@ -7,361 +7,126 @@ const state = vi.hoisted(() => ({
   registerData: null as any,
   prepareInputs: [] as any[],
   dispatchInputs: [] as any[],
-  copiedInputs: [] as any[],
-  acknowledgementInputs: [] as any[],
-  reviewInputs: [] as any[],
-  outcomeInputs: [] as any[],
+  responseInputs: [] as any[],
   directCompletionInputs: [] as any[],
   invalidations: [] as string[],
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
-  useAuth: () => ({
-    user: { id: 1, name: "Operations Manager", role: "hospital_admin" },
-  }),
+  useAuth: () => ({ user: { id: 1, name: "Operations Manager", role: "hospital_admin" } }),
 }));
-vi.mock("@/lib/trpc", () => ({
-  trpc: {
+vi.mock("@/lib/trpc", () => {
+  const mutation = (handler: (input: any) => any) => (options: any) => ({
+    isPending: false,
+    mutate: (input: any) => options.onSuccess?.(handler(input)),
+  });
+  return { trpc: {
     operations: {
-      whatsappTaskRegister: {
-        useQuery: () => ({ isLoading: false, data: state.registerData }),
-      },
-      whatsappTaskPrepare: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any, callOptions?: any) => {
-            state.prepareInputs.push(input);
-            const result = {
-              dispatchId: 501,
-              messageText: input.messageText,
-              status: "prepared",
-              alreadyPrepared: false,
-            };
-            options.onSuccess(result);
-            callOptions?.onSuccess?.(result);
-          },
-        }),
-      },
-      whatsappTaskCopied: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any) => {
-            state.copiedInputs.push(input);
-            options.onSuccess({ status: "copied" });
-          },
-        }),
-      },
-      whatsappTaskDispatch: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any) => {
-            state.dispatchInputs.push(input);
-            options.onSuccess({
-              dispatchId: 501,
-              messageText: input.messageText,
-              alreadyDispatched: false,
-            });
-          },
-        }),
-      },
-      whatsappTaskAcknowledge: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any) => {
-            state.acknowledgementInputs.push(input);
-            options.onSuccess({ status: "acknowledged" });
-          },
-        }),
-      },
-      whatsappTaskReview: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any) => {
-            state.reviewInputs.push(input);
-            options.onSuccess({ status: input.close ? "closed" : "reviewed" });
-          },
-        }),
-      },
-      whatsappTaskOutcome: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any) => {
-            state.outcomeInputs.push(input);
-            options.onSuccess({ status: input.outcome, penaltyApplied: false });
-          },
-        }),
-      },
-      taskManagerDirectComplete: {
-        useMutation: (options: any) => ({
-          isPending: false,
-          mutate: (input: any) => {
-            state.directCompletionInputs.push(input);
-            options.onSuccess({ status: "completed", alreadyCompleted: false });
-          },
-        }),
-      },
+      whatsappTaskRegister: { useQuery: () => ({ isLoading: false, data: state.registerData }) },
+      whatsappTaskHistory: { useQuery: () => ({ isLoading: false, data: null }) },
+      whatsappTaskPrepare: { useMutation: mutation(input => { state.prepareInputs.push(input); return { dispatchId: 501, messageText: input.messageText, status: "prepared", alreadyPrepared: false }; }) },
+      whatsappTaskCopied: { useMutation: mutation(() => ({ status: "copied" })) },
+      whatsappTaskOpened: { useMutation: mutation(() => ({ status: "prepared" })) },
+      whatsappTaskDispatch: { useMutation: mutation(input => { state.dispatchInputs.push(input); return { dispatchId: 501, alreadyDispatched: false }; }) },
+      whatsappTaskResponse: { useMutation: mutation(input => { state.responseInputs.push(input); return { responseId: 601, status: "replied" }; }) },
+      whatsappTaskEvidence: { useMutation: mutation(() => ({ evidenceId: 701, url: "/manus-storage/evidence" })) },
+      whatsappTaskSubmitReview: { useMutation: mutation(() => ({ status: "under_review" })) },
+      whatsappTaskDecision: { useMutation: mutation(() => ({ status: "verified", pointDeltaTenths: 0 })) },
+      whatsappTaskVerifiedComplete: { useMutation: mutation(() => ({ status: "completed" })) },
+      whatsappTaskEscalate: { useMutation: mutation(() => ({ status: "escalated" })) },
+      whatsappTaskCancel: { useMutation: mutation(() => ({ status: "cancelled" })) },
+      whatsappTaskReschedule: { useMutation: mutation(() => ({ status: "rescheduled" })) },
+      taskManagerDirectComplete: { useMutation: mutation(input => { state.directCompletionInputs.push(input); return { status: "completed", alreadyCompleted: false }; }) },
     },
     useUtils: () => ({
       operations: {
-        whatsappTaskRegister: {
-          invalidate: () => state.invalidations.push("register"),
-        },
+        whatsappTaskRegister: { invalidate: () => state.invalidations.push("register") },
+        whatsappTaskHistory: { invalidate: () => state.invalidations.push("history") },
         dashboard: { invalidate: () => state.invalidations.push("dashboard") },
         reports: { invalidate: () => state.invalidations.push("reports") },
       },
     }),
-  },
-}));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+  }};
+});
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() } }));
 
 import WhatsAppTaskRegister from "./WhatsAppTaskRegister";
 
 const makeRow = (dispatch: any = null, frequency = "daily") => ({
-  assignment: { id: 77, dueAt: new Date("2026-08-20T09:00:00.000Z") },
-  task: {
-    id: 5,
-    name: "Lead apron safety check",
-    category: "Safety",
-    frequency,
-  },
+  assignment: { id: 77, status: "not_started", dueAt: new Date("2026-08-20T09:00:00.000Z") },
+  task: { id: 5, name: "Lead apron safety check", category: "Safety", priority: "high", frequency, evidenceRequired: false },
   department: { id: 4, name: "Radiology" },
   dispatch,
-  suggestedMessage:
-    "Radiology daily task: Lead apron safety check. Reply by end of day.",
+  effectiveStatus: dispatch?.status ?? "scheduled",
+  actionRequired: true,
+  suggestedMessage: "HOSPITAL OPERATIONS TASK\nRadiology — Daily task\nTask: Lead apron safety check",
 });
 
 const makeRegisterData = (dispatch: any = null) => ({
-  summary: {
-    sent: dispatch?.status === "sent" ? 1 : 0,
-    completed: dispatch?.status === "completed" ? 1 : 0,
-    pending: 0,
-    notSent: dispatch ? 0 : 1,
-  },
-  scorecards: [
-    { departmentId: 4, departmentName: "Radiology", score: 100, pointsLost: 0 },
-  ],
+  summary: { scheduled: dispatch ? 0 : 1, prepared: 0, sent: dispatch?.sentAt ? 1 : 0, awaitingReply: dispatch ? 1 : 0, replied: 0, underReview: 0, verified: 0, completed: 0, overdue: 0, escalated: 0, actionRequired: 1 },
+  scorecards: [{ departmentId: 4, departmentName: "Radiology", score: 100, pointsLost: 0 }],
   tasks: [makeRow(dispatch)],
   cadenceSummary: [
-    {
-      frequency: "daily" as const,
-      scheduledPlanCount: 2,
-      dueTodayCount: 1,
-      scheduledPlans: [
-        {
-          taskId: 5,
-          taskName: "Lead apron safety check",
-          departmentName: "Radiology",
-          dueTime: "09:00",
-          recurrenceRule: null,
-        },
-      ],
-      dueTodayTasks: [
-        {
-          assignmentId: 77,
-          taskName: "Lead apron safety check",
-          departmentName: "Radiology",
-          dueAt: new Date("2026-08-20T09:00:00.000Z"),
-        },
-      ],
-    },
-    {
-      frequency: "weekly" as const,
-      scheduledPlanCount: 1,
-      dueTodayCount: 0,
-      scheduledPlans: [
-        {
-          taskId: 6,
-          taskName: "Weekend readiness review",
-          departmentName: "Radiology",
-          dueTime: "10:00",
-          recurrenceRule: "weekly:saturday",
-        },
-      ],
-      dueTodayTasks: [],
-    },
-    {
-      frequency: "monthly" as const,
-      scheduledPlanCount: 1,
-      dueTodayCount: 0,
-      scheduledPlans: [
-        {
-          taskId: 7,
-          taskName: "Monthly attendance review",
-          departmentName: "Radiology",
-          dueTime: "11:00",
-          recurrenceRule: null,
-        },
-      ],
-      dueTodayTasks: [],
-    },
+    { frequency: "daily", scheduledPlanCount: 2, dueTodayCount: 1, scheduledPlans: [{ taskId: 5, taskName: "Lead apron safety check", departmentName: "Radiology", dueTime: "09:00", recurrenceRule: null }] },
+    { frequency: "weekly", scheduledPlanCount: 1, dueTodayCount: 0, scheduledPlans: [{ taskId: 6, taskName: "Weekend readiness review", departmentName: "Radiology", dueTime: "10:00", recurrenceRule: "weekly:saturday" }] },
+    { frequency: "monthly", scheduledPlanCount: 1, dueTodayCount: 0, scheduledPlans: [{ taskId: 7, taskName: "Monthly attendance review", departmentName: "Radiology", dueTime: "11:00", recurrenceRule: null }] },
   ],
 });
 
-describe("WhatsAppTaskRegister manager workflow", () => {
+describe("WhatsAppTaskRegister command center", () => {
   let container: HTMLDivElement;
   let root: Root;
-
   beforeEach(() => {
     state.registerData = makeRegisterData();
-    state.prepareInputs = [];
-    state.dispatchInputs = [];
-    state.copiedInputs = [];
-    state.acknowledgementInputs = [];
-    state.reviewInputs = [];
-    state.outcomeInputs = [];
-    state.directCompletionInputs = [];
-    state.invalidations = [];
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
+    state.prepareInputs = []; state.dispatchInputs = []; state.responseInputs = []; state.directCompletionInputs = []; state.invalidations = [];
+    container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   });
+  afterEach(() => { act(() => root.unmount()); container.remove(); document.body.querySelectorAll("[data-radix-portal]").forEach(node => node.remove()); });
 
-  afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
-    document.body
-      .querySelectorAll("[data-radix-portal]")
-      .forEach(node => node.remove());
-  });
-
-  it("requires a manager confirmation after reviewing the visible WhatsApp message before recording a task as sent", () => {
+  it("requires an explicit manager confirmation before a prepared message is recorded as manually sent", () => {
     act(() => root.render(<WhatsAppTaskRegister />));
-    const prepareButton = Array.from(container.querySelectorAll("button")).find(
-      button => button.textContent?.includes("Prepare message")
-    ) as HTMLButtonElement;
-    act(() => prepareButton.click());
-
-    const preview = document.querySelector(
-      "#whatsappMessagePreview"
-    ) as HTMLTextAreaElement;
-    const recordButton = Array.from(document.querySelectorAll("button")).find(
-      button => button.textContent === "Confirm manual send"
-    ) as HTMLButtonElement;
-    expect(preview.value).toContain("Lead apron safety check");
-    expect(recordButton.disabled).toBe(true);
-
-    const confirmation = document.querySelector(
-      '[role="checkbox"]'
-    ) as HTMLButtonElement;
-    act(() => confirmation.click());
-    expect(recordButton.disabled).toBe(false);
-    act(() => recordButton.click());
-
-    expect(state.dispatchInputs).toEqual([
-      {
-        assignmentId: 77,
-        messageText:
-          "Radiology daily task: Lead apron safety check. Reply by end of day.",
-      },
-    ]);
+    const prepare = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Prepare message")) as HTMLButtonElement;
+    act(() => prepare.click());
+    const confirm = Array.from(document.querySelectorAll("button")).find(button => button.textContent === "Confirm manual send") as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    const checkbox = document.querySelector('[role="checkbox"]') as HTMLButtonElement;
+    act(() => checkbox.click());
+    expect(confirm.disabled).toBe(false);
+    act(() => confirm.click());
     expect(state.prepareInputs).toHaveLength(1);
-    expect(state.invalidations).toEqual(
-      expect.arrayContaining(["register", "dashboard"])
-    );
+    expect(state.dispatchInputs).toEqual([{ assignmentId: 77, messageText: expect.stringContaining("Lead apron safety check") }]);
+    expect(state.invalidations).toEqual(expect.arrayContaining(["register", "dashboard"]));
   });
 
-  it("records an end-of-day department reply from the task register", () => {
-    state.registerData = makeRegisterData({
-      id: 501,
-      status: "sent",
-      messageText: "Radiology daily task",
-    });
+  it("records a structured manager-transcribed WhatsApp reply rather than inventing a task outcome", () => {
+    state.registerData = makeRegisterData({ id: 501, status: "awaiting_reply", sentAt: new Date(), messageText: "Task" });
     act(() => root.render(<WhatsAppTaskRegister />));
-    const replyButton = Array.from(container.querySelectorAll("button")).find(
-      button => button.textContent === "EOD reply"
-    ) as HTMLButtonElement;
-    act(() => replyButton.click());
-    const saveButton = Array.from(document.querySelectorAll("button")).find(
-      button => button.textContent === "Save end-of-day outcome"
-    ) as HTMLButtonElement;
-    act(() => saveButton.click());
-
-    expect(state.outcomeInputs).toEqual([
-      {
-        dispatchId: 501,
-        outcome: "completed",
-        note: undefined,
-        excusedReason: undefined,
-      },
-    ]);
-    expect(state.invalidations).toEqual(
-      expect.arrayContaining(["register", "dashboard"])
-    );
+    const reply = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Record reply") as HTMLButtonElement;
+    act(() => reply.click());
+    const save = Array.from(document.querySelectorAll("button")).filter(button => button.textContent === "Record reply").at(-1) as HTMLButtonElement;
+    act(() => save.click());
+    expect(state.responseInputs).toEqual([expect.objectContaining({ dispatchId: 501, responseStatus: "completed" })]);
   });
 
-  it("records a task performed directly by the operations manager without preparing a WhatsApp message", () => {
+  it("keeps manager-completed work outside WhatsApp dispatch and department scoring", () => {
     act(() => root.render(<WhatsAppTaskRegister />));
-    const directButton = Array.from(container.querySelectorAll("button")).find(
-      button => button.textContent?.includes("Complete myself")
-    ) as HTMLButtonElement;
-    act(() => directButton.click());
-    const confirmButton = Array.from(document.querySelectorAll("button")).find(
-      button => button.textContent === "Confirm manager completion"
-    ) as HTMLButtonElement;
-    act(() => confirmButton.click());
-
-    expect(state.directCompletionInputs).toEqual([
-      { assignmentId: 77, notes: undefined },
-    ]);
+    const direct = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Complete myself")) as HTMLButtonElement;
+    act(() => direct.click());
+    const confirm = Array.from(document.querySelectorAll("button")).find(button => button.textContent === "Confirm manager completion") as HTMLButtonElement;
+    act(() => confirm.click());
+    expect(state.directCompletionInputs).toEqual([{ assignmentId: 77, notes: undefined }]);
     expect(state.prepareInputs).toEqual([]);
     expect(state.dispatchInputs).toEqual([]);
-    expect(state.invalidations).toEqual(
-      expect.arrayContaining(["register", "dashboard", "reports"])
-    );
   });
 
-  it("labels daily, weekly, and monthly WhatsApp tasks by cadence", () => {
-    state.registerData = {
-      ...makeRegisterData(),
-      tasks: [
-        makeRow(null, "daily"),
-        {
-          ...makeRow(null, "weekly"),
-          assignment: { id: 78, dueAt: new Date("2026-08-20T10:00:00.000Z") },
-        },
-        {
-          ...makeRow(null, "monthly"),
-          assignment: { id: 79, dueAt: new Date("2026-08-20T11:00:00.000Z") },
-        },
-      ],
-    };
+  it("shows lifecycle metrics and daily, weekly, and monthly cadence plans", () => {
     act(() => root.render(<WhatsAppTaskRegister />));
-
-    expect(container.textContent).toContain("Daily");
-    expect(container.textContent).toContain("Weekly");
-    expect(container.textContent).toContain("Monthly");
-  });
-
-  it("labels historical dispatches as distributed records and shows only active sends as awaiting acknowledgement", () => {
-    state.registerData = {
-      ...makeRegisterData({
-        id: 501,
-        status: "closed",
-        messageText: "Radiology daily task",
-      }),
-      summary: {
-        sent: 1,
-        completed: 1,
-        pending: 0,
-        notSent: 0,
-        awaitingAcknowledgement: 0,
-      },
-    };
-    act(() => root.render(<WhatsAppTaskRegister />));
-
-    expect(container.textContent).toContain("Distributed task records");
-    expect(container.textContent).toContain("0 awaiting acknowledgement");
-    expect(container.textContent).not.toContain("Awaiting department reply");
-  });
-
-  it("shows daily, weekly, and monthly schedule cards even when a cadence has no task due today", () => {
-    act(() => root.render(<WhatsAppTaskRegister />));
-
+    expect(container.textContent).toContain("Action required");
+    expect(container.textContent).toContain("Awaiting reply");
     expect(container.textContent).toContain("Daily tasks");
     expect(container.textContent).toContain("Weekly tasks");
     expect(container.textContent).toContain("Monthly tasks");
     expect(container.textContent).toContain("Weekend readiness review");
-    expect(container.textContent).toContain("0 due today");
   });
 });

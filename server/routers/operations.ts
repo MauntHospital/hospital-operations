@@ -2,9 +2,11 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
   acknowledgeWhatsAppTask,
+  cancelWhatsAppTask,
   assignIssue,
   completeTask,
   completeTaskDirectlyByManager,
+  completeVerifiedWhatsAppTask,
   createDutyRoster,
   createEquipmentMaintenance,
   createExpiryItem,
@@ -16,6 +18,7 @@ import {
   createRisk,
   createTask,
   dispatchWhatsAppTask,
+  decideWhatsAppTaskReview,
   getCalendar,
   getDashboard,
   getDepartmentTaskSchedules,
@@ -28,6 +31,7 @@ import {
   getRiskRegister,
   getSettings,
   getTaskDetail,
+  getWhatsAppTaskHistory,
   resolveExpiryItem,
   getTaskScoringRules,
   getWhatsAppTaskRegister,
@@ -35,10 +39,13 @@ import {
   listIssues,
   manageDepartment,
   prepareWhatsAppTask,
+  recordWhatsAppTaskOpened,
   recordWhatsAppTaskCopied,
   recordWhatsAppTaskOutcome,
+  recordWhatsAppTaskResponse,
   resolveIssue,
   reviewWhatsAppTask,
+  rescheduleWhatsAppTask,
   saveChecklistResult,
   setDepartmentActive,
   updateDepartment,
@@ -49,6 +56,10 @@ import {
   updateOperationalAlert,
   updateRisk,
   updateTaskScoringRule,
+  updateTaskScheduleConfiguration,
+  uploadWhatsAppTaskEvidence,
+  submitWhatsAppTaskForReview,
+  escalateWhatsAppTask,
 } from "../operationsData";
 
 const priority = z.enum(["critical", "high", "medium", "low"]);
@@ -83,6 +94,20 @@ export const operationsRouter = router({
   departmentSchedules: protectedProcedure.query(({ ctx }) =>
     getDepartmentTaskSchedules(ctx.user)
   ),
+  departmentScheduleUpdate: protectedProcedure
+    .input(
+      z.object({
+        taskId: z.number().int().positive(),
+        dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+        gracePeriodMinutes: z.number().int().min(0).max(24 * 60),
+        escalationDelayMinutes: z.number().int().min(0).max(7 * 24 * 60),
+        evidenceRequired: z.boolean(),
+        verificationRequired: z.boolean(),
+        responsibleRole: z.string().max(120).optional(),
+        responseFields: z.array(z.string().min(1).max(120)).max(12).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => updateTaskScheduleConfiguration(ctx.user, input)),
   myDay: protectedProcedure.query(({ ctx }) => getMyDay(ctx.user)),
   modules: protectedProcedure.query(({ ctx }) =>
     getOperationsModules(ctx.user)
@@ -148,6 +173,9 @@ export const operationsRouter = router({
   whatsappTaskCopied: protectedProcedure
     .input(z.object({ dispatchId: z.number().int().positive() }))
     .mutation(({ ctx, input }) => recordWhatsAppTaskCopied(ctx.user, input)),
+  whatsappTaskOpened: protectedProcedure
+    .input(z.object({ dispatchId: z.number().int().positive() }))
+    .mutation(({ ctx, input }) => recordWhatsAppTaskOpened(ctx.user, input)),
   whatsappTaskDispatch: protectedProcedure
     .input(
       z.object({
@@ -183,6 +211,94 @@ export const operationsRouter = router({
       })
     )
     .mutation(({ ctx, input }) => reviewWhatsAppTask(ctx.user, input)),
+  whatsappTaskResponse: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        responseStatus: z.enum([
+          "completed",
+          "partially_completed",
+          "not_completed",
+          "unable_to_complete",
+          "valid_exception",
+        ]),
+        findings: z.string().max(5000).optional(),
+        actionTaken: z.string().max(5000).optional(),
+        responsibleStaff: z.string().max(220).optional(),
+        completedAt: z.date().optional(),
+        nonCompletionReason: z.string().max(160).optional(),
+        additionalNotes: z.string().max(5000).optional(),
+        structuredFields: z
+          .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+          .optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => recordWhatsAppTaskResponse(ctx.user, input)),
+  whatsappTaskSubmitReview: protectedProcedure
+    .input(z.object({ dispatchId: z.number().int().positive() }))
+    .mutation(({ ctx, input }) => submitWhatsAppTaskForReview(ctx.user, input)),
+  whatsappTaskDecision: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        decision: z.enum([
+          "verify",
+          "rework",
+          "valid_exception",
+          "department_failure",
+        ]),
+        note: z.string().min(2).max(5000),
+      })
+    )
+    .mutation(({ ctx, input }) => decideWhatsAppTaskReview(ctx.user, input)),
+  whatsappTaskVerifiedComplete: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        note: z.string().max(3000).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => completeVerifiedWhatsAppTask(ctx.user, input)),
+  whatsappTaskEscalate: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        reason: z.string().min(2).max(5000),
+        escalationLevel: z.string().max(80).optional(),
+        escalatedTo: z.string().max(220).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => escalateWhatsAppTask(ctx.user, input)),
+  whatsappTaskCancel: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        reason: z.string().min(2).max(5000),
+      })
+    )
+    .mutation(({ ctx, input }) => cancelWhatsAppTask(ctx.user, input)),
+  whatsappTaskReschedule: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        rescheduledDueAt: z.date(),
+        reason: z.string().min(2).max(5000),
+      })
+    )
+    .mutation(({ ctx, input }) => rescheduleWhatsAppTask(ctx.user, input)),
+  whatsappTaskEvidence: protectedProcedure
+    .input(
+      z.object({
+        dispatchId: z.number().int().positive(),
+        fileName: z.string().min(1).max(300),
+        mimeType: z.string().min(3).max(160),
+        base64Data: z.string().min(1).max(12_000_000),
+      })
+    )
+    .mutation(({ ctx, input }) => uploadWhatsAppTaskEvidence(ctx.user, input)),
+  whatsappTaskHistory: protectedProcedure
+    .input(z.object({ assignmentId: z.number().int().positive() }))
+    .query(({ ctx, input }) => getWhatsAppTaskHistory(ctx.user, input.assignmentId)),
   issues: protectedProcedure.query(({ ctx }) => listIssues(ctx.user)),
   issueCreate: protectedProcedure
     .input(

@@ -162,3 +162,14 @@
 - [x] Design a safe GitHub Pages deployment path that does not expose secrets or break the existing API, database, or sign-in workflow.
 - [x] Implement and validate the approved GitHub Pages configuration or document the required external backend handoff.
 - [x] Publish the verified deployment configuration and report the GitHub Pages URL status and functional limitations.
+- [x] Audit the current WhatsApp Tasks schema, service logic, schedule generation, scoring, permissions, audit trail, existing UI, and connected manager workspaces.
+- [ ] Use the existing automatic operational cycle, standardize WhatsApp task timing to Asia/Kathmandu, and preserve Housekeeping and Housekeeping/Infection Control as separate departments.
+- [x] Define and document the upgraded lifecycle, task-state mapping, response/evidence data model, fair accountability rules, deadline/grace/escalation timing, and background processing approach.
+- [x] Add schema and server support for lifecycle states, structured replies, verification, rework, evidence metadata, valid exceptions, cancellation, rescheduling, task deadlines, and escalation records.
+- [ ] Implement fair configurable scoring that separates manager non-distribution, department outcomes, exceptions, cancellations, reschedules, direct completion, and escalation without false department penalties.
+- [x] Rebuild the WhatsApp Tasks page into a responsive manager command center with metric drill-throughs, action queue, search, filters, sorting, compact task views, and clear empty states.
+- [x] Add message generation, manual-copy/open/confirm-sent controls, structured reply review, verification, rework, escalation, manager completion, and immutable per-task history.
+- [ ] Enhance task schedule configuration, task-specific due/grace/escalation/evidence/verification settings, priority, categories, scorecards, monthly trends, and meeting-ready reporting.
+- [ ] Enforce role controls, server-side validation, concurrency-safe state transitions, duplicate prevention, timezone correctness, error feedback, and code-quality cleanup.
+- [ ] Add comprehensive lifecycle, scoring, schedule, timezone, escalation, permission, duplicate-prevention, regression, desktop, tablet, and mobile coverage.
+- [ ] Run full database, workflow, build, dependency-security, and responsive verification; publish the upgraded WhatsApp Tasks command-center release and implementation report.
