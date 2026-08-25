@@ -139,5 +139,9 @@ describe("WhatsAppTaskRegister command center", () => {
     expect(container.textContent).toContain("Weekly tasks");
     expect(container.textContent).toContain("Monthly tasks");
     expect(container.textContent).toContain("Weekend readiness review");
+    expect(container.querySelector('[aria-label^="Daily task plan"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label^="Weekly task plan"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label^="Monthly task plan"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("more active plans");
   });
 });

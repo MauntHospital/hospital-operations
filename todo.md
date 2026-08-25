@@ -173,3 +173,4 @@
 - [x] Enforce role controls, server-side validation, concurrency-safe state transitions, duplicate prevention, timezone correctness, error feedback, and code-quality cleanup.
 - [x] Add comprehensive lifecycle, scoring, schedule, timezone, escalation, permission, duplicate-prevention, regression, desktop, tablet, and mobile coverage.
 - [x] Run full database, workflow, build, dependency-security, and responsive verification; publish the upgraded WhatsApp Tasks command-center release and implementation report.
+- [x] Make the Daily, Weekly, and Monthly WhatsApp command-center task lists independently scrollable on desktop and mobile without hiding task information or controls.

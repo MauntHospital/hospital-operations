@@ -15,3 +15,7 @@ The WhatsApp command center retains readable lifecycle metrics, action cards, ca
 ## Tablet review — 768-pixel viewport
 
 Both workspaces rendered without overlap, inaccessible controls, or horizontal clipping at the tablet breakpoint. The command center preserves task cards and manager actions in a readable single-column layout, while the schedule workspace transitions to its detailed table where the wider width is appropriate. The manager sidebar, lifecycle metrics, action queue, scorecard, filters, and separate Housekeeping definitions remain visible and coherent.
+
+## Cadence-list scroll review — 25 August 2026
+
+Daily, Weekly, and Monthly plan cards now each keep their full task list inside an independent bounded vertical scroll area. The cards retain their cadence count and task metadata without truncating the plan to four entries. The 390-pixel mobile and 1280-pixel desktop reviews showed stable layouts with no clipped task text or displaced action controls.
