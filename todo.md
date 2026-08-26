@@ -174,3 +174,5 @@
 - [x] Add comprehensive lifecycle, scoring, schedule, timezone, escalation, permission, duplicate-prevention, regression, desktop, tablet, and mobile coverage.
 - [x] Run full database, workflow, build, dependency-security, and responsive verification; publish the upgraded WhatsApp Tasks command-center release and implementation report.
 - [x] Make the Daily, Weekly, and Monthly WhatsApp command-center task lists independently scrollable on desktop and mobile without hiding task information or controls.
+- [x] Prepare a safe downloadable local browser-run option and setup guide for the full-stack Hospital Operations application without exposing production data or secrets.
+- [x] Create a local server package with safe environment templates, Windows-friendly start scripts, a local run guide, and a downloadable archive that excludes production secrets and hospital data.
